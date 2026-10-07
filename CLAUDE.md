@@ -16,9 +16,17 @@ pnpm install
 pnpm dev                    # servidor de desarrollo con HMR
 pnpm build                  # -> dist/index.html, un solo archivo autocontenido
 pnpm preview                # sirve el build
-pnpm test                   # smoke tests (buildea y sirve solo)
+pnpm test                   # toda la suite (buildea y sirve sola)
+pnpm test --project=node    # solo unitarios, sin navegador: segundos en vez de minutos
 pnpm test -g "reset"        # un test puntual, por nombre
 ```
+
+La suite de navegador tarda ~4 min porque corre en serie y el navegador renderiza
+por software. Para iterar sobre lógica, usá `--project=node`.
+
+Banderas de URL para desarrollo: `?dev` expone `window.__dev` (pedazos,
+telemetría de corte, estado de las hojas, planaridad de la cara de corte, pausa de
+la simulación) y `?replay=<url>` reproduce una sesión de landmarks grabada.
 
 `playwright.config.js` usa `channel: 'chrome'` (el Chrome del sistema) en vez del
 Chromium que trae Playwright, que **no tiene build para Ubuntu 20.04**. En CI se
@@ -131,28 +139,49 @@ alineación de normales de 0.56 a 0.385, y suavizar a lo largo de la superficie 
 resultados erráticos y no monótonos. La escalera la produce *qué celdas sobreviven*,
 no dónde están las partículas.
 
-El control ya puntúa **0.926** de alineación con el 82% de las caras dentro de 30°:
-las normales ya están bien, lo feo es la **silueta**, que es geometría. Arreglarlo
-de verdad pide geometría sub-celda, no más suavizado. Los números están en
-`docs/ARCHITECTURE.md`.
+Las normales ya están bien; lo feo es la **silueta**, que es geometría. Arreglarlo
+de verdad pide geometría sub-celda, no más suavizado.
+
+La métrica que decide es `window.__dev.cutFacePlanarity()` con `?dev`. Usá
+`restRms`, que es determinista: **la línea base es 0.084**, media celda de la
+lattice, que es justo la amplitud del escalón. Objetivo de un arreglo real: < 0.02.
+Los detalles están en `docs/ARCHITECTURE.md`.
+
+## Escribir tests acá
+
+Dos reglas que no son obvias y que costaron una tarde:
+
+**Las velocidades van en unidades de mundo por segundo, nunca en píxeles por
+frame.** El umbral de corte está en esas unidades y el navegador de test renderiza
+por software a pocos fps: el mismo gesto en píxeles por frame da velocidades
+completamente distintas según la máquina. `tests/behaviour.spec.js` tiene el
+helper `swipe()` que hace la conversión.
+
+**La suite corre en serie** (`workers: 1`, `fullyParallel: false`). En paralelo,
+varias instancias WebGL por software se roban CPU, los fps colapsan y los barridos
+se quedan sin frames: la suite fallaba en paralelo y pasaba de a un test.
+
+Para cualquier aserción que dependa de que el corte ocurra, usá **el replay**
+(`runReplay()`), no un barrido de mouse: a 4 fps un tajo de mouse tiene 3 frames y
+si la guarda de rotación veta uno, no corta. El replay avanza un frame grabado por
+frame renderizado y es reproducible.
+
+Pero el replay fija la **entrada**, no la simulación: la física acumula pasos fijos
+contra tiempo real, así que el corte varía unos pocos resortes entre máquinas. Las
+aserciones exactas van sobre `restRms` (posiciones de reposo, sin deformación).
 
 ## Verificar cambios
 
-Los smoke tests cubren arranque, WebGL, reset y que el build sea un solo archivo.
-**No cubren comportamiento**, así que lo que sigue va a mano sobre el build, con
-`file://` y también servido:
+`pnpm test` cubre el contrato de interacción, la órbita, el reset, el jugo en
+pantalla, el encuadre en HiDPI y el replay. Lo que sigue va igual a mano:
 
-- Arrastre lento ≈ 400–800 px/s → 1 pedazo (empuja). Tajo rápido ≈ 2500 px/s →
-  2 pedazos (corta).
-- Orbitar 90° y volver a cortar: el corte tiene que seguir el plano de pantalla.
-- Redimensionar en una pantalla con `devicePixelRatio 2`: la sandía queda centrada.
-- 60 fps en reposo y consola limpia.
-
-**El tracking nunca se validó con una mano real.** Todo el camino de cámara se
-probó con un stream sintético, que ejercita MediaPipe completo (modelo, delegate
-GPU, `detectForVideo`, preview) pero nunca produce una detección. El mapeo
-landmarks→cuchillo, el espejado y el camino de dos manos siguen sin verificar
-contra hardware.
+- 60 fps en reposo abriendo `dist/index.html` con `file://`, y consola limpia.
+- **El tracking con una mano real.** Nunca se validó contra hardware: todo el
+  camino de cámara se probó con un stream sintético, que ejercita MediaPipe
+  completo (modelo, delegate GPU, `detectForVideo`, preview) pero nunca produce una
+  detección. El mapeo landmarks→cuchillo, el espejado y el camino de dos manos
+  siguen sin verificar. Para capturar una sesión y volverla fixture: `D` → **Grabar
+  landmarks**.
 
 ## Commits
 
