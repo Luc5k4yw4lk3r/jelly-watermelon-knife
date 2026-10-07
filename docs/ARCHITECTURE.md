@@ -155,6 +155,20 @@ verdad requiere geometría sub-celda —partir las celdas en el plano de corte y
 generar polígonos nuevos— o una lattice bastante más fina. Cualquier otra cosa es
 mover ruido de lugar.
 
+**La métrica buena es otra.** La alineación de normales no sirve para esto porque
+las normales ya están suavizadas. Lo que hay que medir es **planaridad**: el RMS
+de la distancia de los vértices de la cara al plano de mejor ajuste. Está en
+`window.__dev.cutFacePlanarity()` con `?dev`, y devuelve dos números:
+
+- `rms`, sobre la malla tal como se dibuja. Es el que importa, pero incluye el
+  bamboleo de la gelatina y varía entre 0.2 y 0.4 corrida a corrida.
+- `restRms`, sobre las posiciones de reposo. Mide solo la escalera geométrica:
+  sale **0.084** de forma determinista, que es media celda de la lattice (0.18) —
+  exactamente la amplitud del escalón.
+
+**0.084 es la línea base.** Una cara realmente plana debería dar por debajo de
+0.02.
+
 ## Render
 
 El shader de la gelatina hace su propio sombreado en vez de usar un material de
@@ -201,6 +215,42 @@ cuchillo a la derecha.
 Se trackean **dos manos**, cada una con su propio banco de filtros. Los slots se
 asignan por la *handedness* que reporta MediaPipe, no por el orden del array: ese
 orden no es estable entre frames y los cuchillos terminan intercambiándose solos.
+
+## Cómo se prueba esto
+
+La lógica de tracking vive en `input/handPose.js`, **sin DOM ni MediaPipe**:
+asignación de slots por handedness, One Euro, pérdida y reaparición de la mano.
+`input/handTracking.js` queda como cáscara de hardware. Esa separación es lo que
+hace que lo único realmente frágil del tracking se pueda probar en Node, sin
+navegador ni cámara.
+
+Encima de eso hay un **replay**: `?replay=<url>` alimenta el mismo `handPose` con
+landmarks grabados. El grabador está en el panel de tuneo (`D`) y guarda los
+landmarks **crudos**, pre-One-Euro, para que el filtro quede bajo test y no se dé
+por buena su salida.
+
+El detalle que hace al replay útil: avanza **un frame grabado por frame
+renderizado**, no por reloj de pared, y le pasa a la hoja el `dt` **grabado** para
+calcular la velocidad. Si avanzara por tiempo real, en una máquina que renderiza
+más lento que la grabación el replay entero se consume entre dos frames — que es
+exactamente lo que pasaba en la primera versión.
+
+### Dos cosas que hay que saber antes de escribir un test acá
+
+**Las velocidades van en unidades de mundo por segundo, no en píxeles por frame.**
+El umbral de corte está en esas unidades y el navegador de CI renderiza por
+software a pocos fps: el mismo gesto en píxeles por frame da velocidades
+completamente distintas según la máquina.
+
+**Los tests corren en serie.** Varias instancias WebGL por software compitiendo se
+roban CPU entre sí, los fps colapsan y los barridos se quedan sin frames: la suite
+fallaba en paralelo y pasaba de a un test.
+
+Y un límite honesto: el replay fija la **entrada**, no la simulación. La física
+avanza por pasos fijos acumulados contra tiempo real, así que cuántos substeps
+caen entre dos frames depende de la máquina y el corte varía unos pocos resortes.
+Por eso las aserciones exactas van sobre `restRms` (posiciones de reposo, sin
+deformación) y no sobre números que dependan del bamboleo.
 
 ## Performance
 

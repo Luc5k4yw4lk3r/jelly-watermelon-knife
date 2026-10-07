@@ -44,8 +44,21 @@ pnpm install
 pnpm dev        # servidor de desarrollo con HMR
 pnpm build      # -> dist/index.html, un solo archivo autocontenido
 pnpm preview    # sirve el build
-pnpm test       # smoke tests
+pnpm test                 # toda la suite
+pnpm test --project=node  # solo los unitarios, sin navegador (rápido)
+pnpm test -g "reset"      # un test puntual, por nombre
 ```
+
+Dos banderas de URL, solo para desarrollo:
+
+| | |
+|---|---|
+| `?dev` | expone `window.__dev`: pedazos, telemetría de corte, estado de las hojas, planaridad de la cara de corte y pausa de la simulación |
+| `?replay=<url>` | reproduce una sesión de landmarks grabada en lugar de usar la cámara |
+
+Para grabar una sesión: abrí el panel de tuneo con `D`, activá la cámara y tocá
+**Grabar landmarks**. Baja un JSON que sirve tanto para los tests como para
+reproducir a mano algo que pasó una sola vez.
 
 El código vive en `src/`, en módulos por dominio. El build vuelve a empaquetarlo
 todo en un archivo porque Chrome bloquea los `import` relativos desde `file://`, y
@@ -76,7 +89,8 @@ La versión corta:
 - **Corte en espacio de cámara**, así que la órbita no lo rompe y se puede cortar
   en profundidad.
 - **MediaPipe** sobre `requestVideoFrameCallback`, nunca dentro del render loop,
-  con hasta dos manos.
+  con hasta dos manos. La lógica de landmarks está separada de la cámara, así que
+  se puede probar sin hardware y reproducir sesiones grabadas.
 
 La versión larga, con los porqués y los bugs que costaron encontrar, está en
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
