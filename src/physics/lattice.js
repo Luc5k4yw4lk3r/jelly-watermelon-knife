@@ -1,6 +1,7 @@
 import {
   NX, NY, NZ, RX, RY, RZ, stiffnessByType,
 } from '../config.js';
+import { CELL_CORNERS } from './cellClip.js';
 
 /**
  * La estructura estática de la sandía: partículas, resortes, celdas y caras.
@@ -17,6 +18,8 @@ const SPRING_OFFSETS = [
 ];
 
 // orden de esquinas antihorario visto desde afuera, por dirección (+X,-X,+Y,-Y,+Z,-Z)
+/* El orden de esquinas de una celda vive en `cellClip.js`, que es quien lo
+   necesita para recortar; acá se consume para armar la tabla por celda. */
 const FACE_CORNERS = [
   [[1,0,0],[1,1,0],[1,1,1],[1,0,1]],
   [[0,0,0],[0,0,1],[0,1,1],[0,1,0]],
@@ -132,6 +135,22 @@ export function createLattice() {
     }
   }
 
+  /* Las 8 esquinas de cada celda. La arman el medidor de volumen y el recorte
+     de la cara de corte, así que vive donde viven las celdas y no en el closure
+     de uno de los dos. */
+  const cellCorner = new Int32Array(NCELL * 8);
+  for (let i = 0; i < NCX; i++) {
+    for (let j = 0; j < NCY; j++) {
+      for (let k = 0; k < NCZ; k++) {
+        const c = cellIdx(i, j, k) * 8;
+        for (let v = 0; v < 8; v++) {
+          const [a, b, d] = CELL_CORNERS[v];
+          cellCorner[c + v] = gid(i + a, j + b, k + d);
+        }
+      }
+    }
+  }
+
   // --- vecinos estructurales de cada partícula, para el suavizado de render ---
   const nbrP = new Int32Array(N * 6).fill(-1);
   const nbrS = new Int32Array(N * 6).fill(-1);
@@ -162,6 +181,7 @@ export function createLattice() {
     M, sprA, sprB, sprRest, sprK, sprType, sprAlive, structSpring, maxSprLen,
     NCELL, cellIdx, cellEdges,
     NFACE, faceCell, faceNbCell, faceKind, faceCorner,
+    cellCorner,
     nbrP, nbrS,
     reset, refreshStiffness,
   };

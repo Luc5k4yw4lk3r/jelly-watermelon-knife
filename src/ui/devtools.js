@@ -6,6 +6,8 @@
  * consola pueden preguntar sin tocar el código, y la métrica que decide si una
  * mejora de la cara de corte sirve queda estable entre versiones.
  */
+import { planarityOf } from '../physics/planarity.js';
+
 export const DEV = new URLSearchParams(location.search).has('dev');
 
 /**
@@ -23,49 +25,6 @@ export function installDevtools({
   cutLine, splitAt,
 }) {
   if (!DEV) return;
-
-  /**
-   * Planaridad de la cara de corte: RMS de la distancia de sus vértices al plano
-   * de mejor ajuste, en unidades de mundo.
-   *
-   * Es la métrica correcta para la silueta escalonada. La alineación de normales
-   * **no** sirve: ya puntúa 0.93 porque las normales están suavizadas, mientras
-   * la silueta sigue en escalera. Esto mide la amplitud del escalón, que es lo
-   * que se ve. Una celda de la lattice mide ~0.18, así que la línea base ronda
-   * 0.09 y una cara realmente plana debería dar < 0.02.
-   */
-  function planarityOf(positions, idxs) {
-    const n = idxs.length;
-    if (n < 4) return 0;
-    let cx = 0, cy = 0, cz = 0;
-    for (const p of idxs) { cx += positions[p*3]; cy += positions[p*3+1]; cz += positions[p*3+2]; }
-    cx /= n; cy /= n; cz /= n;
-
-    let xx=0, xy=0, xz=0, yy=0, yz=0, zz=0;
-    for (const p of idxs) {
-      const dx = positions[p*3]-cx, dy = positions[p*3+1]-cy, dz = positions[p*3+2]-cz;
-      xx+=dx*dx; xy+=dx*dy; xz+=dx*dz; yy+=dy*dy; yz+=dy*dz; zz+=dz*dz;
-    }
-    // normal del plano de mejor ajuste: autovector menor de la covarianza. Se
-    // itera sobre (traza*I - C), que invierte el orden espectral y deja el menor
-    // como dominante
-    const tr = xx + yy + zz;
-    const m = [tr-xx, -xy, -xz, -xy, tr-yy, -yz, -xz, -yz, tr-zz];
-    let vx = 1, vy = 1, vz = 1;
-    for (let it = 0; it < 48; it++) {
-      const nx = m[0]*vx + m[1]*vy + m[2]*vz;
-      const ny = m[3]*vx + m[4]*vy + m[5]*vz;
-      const nz = m[6]*vx + m[7]*vy + m[8]*vz;
-      const l = Math.hypot(nx, ny, nz) || 1;
-      vx = nx/l; vy = ny/l; vz = nz/l;
-    }
-    let sum = 0;
-    for (const p of idxs) {
-      const d = (positions[p*3]-cx)*vx + (positions[p*3+1]-cy)*vy + (positions[p*3+2]-cz)*vz;
-      sum += d*d;
-    }
-    return +Math.sqrt(sum / n).toFixed(4);
-  }
 
   /**
    * Planaridad de la cara de corte: RMS de la distancia de sus vértices al plano

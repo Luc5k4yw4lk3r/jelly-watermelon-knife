@@ -126,6 +126,17 @@ export function createShapeMatcher(lat) {
     }
     for (let c = 0; c < nComp; c++) compOk[c] = inv3(compApq, c*9, compAqqInv, c*9) ? 1 : 0;
 
+    /* La transformación arranca en la identidad. Solo la escribe `apply()`, así
+       que sin esto una pieza recién nacida hereda la del ocupante anterior del
+       slot: con la física congelada —el camino de `__dev.pause()`— nunca se
+       corrige, y lo que la lea queda orientado por un corte que ya pasó. */
+    for (let c = 0; c < nComp; c++) {
+      const m = c*9;
+      compT[m] = 1; compT[m+1] = 0; compT[m+2] = 0;
+      compT[m+3] = 0; compT[m+4] = 1; compT[m+5] = 0;
+      compT[m+6] = 0; compT[m+7] = 0; compT[m+8] = 1;
+    }
+
     return Math.max(1, pieces);
   }
 
@@ -236,5 +247,9 @@ export function createShapeMatcher(lat) {
     rebuild, apply, dampSpin,
     get nComp() { return nComp; },
     compOf,
+    /* Rotación (con la parte lineal) de cada pieza, 3×3 por componente. La lee
+       la cara de corte para orientar sus vértices con el pedazo al que
+       pertenecen. */
+    compT,
   };
 }
