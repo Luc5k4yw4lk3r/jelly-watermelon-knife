@@ -28,6 +28,9 @@ cuchillo cae automáticamente al mouse y todo lo demás funciona igual.
 |---|---|
 | Mano lenta | El cuchillo empuja y aplasta la gelatina |
 | Tajo rápido, de punta | Corta y separa pedazos reales |
+| Dos manos | Dos cuchillos, cada uno cortando por su cuenta |
+| Flechas, botón derecho o dos dedos | Gira la cámara |
+| `D` | Panel de tuneo en vivo |
 | `R` o *Reset sandía* | Sandía nueva |
 
 El cuchillo corta **de punta**: tiene que viajar sobre su propio eje. Moverlo de
@@ -55,9 +58,9 @@ src/
 ├── main.js          cableado y frame loop
 ├── physics/         lattice, solver, shape matching, corte, topología
 ├── render/          escena, malla de la gelatina, shaders, cuchillo, jugo
-├── input/           tracking de mano, One Euro, mouse, pose de la hoja
+├── input/           tracking de mano, One Euro, mouse, órbita, pose de la hoja
 ├── audio/           squish sintetizado con WebAudio
-└── ui/              HUD y overlay
+└── ui/              HUD, overlay y panel de tuneo
 ```
 
 ## Cómo funciona
@@ -70,7 +73,10 @@ La versión corta:
   no propaga rigidez a través de 10 capas y la sandía se despanzurra.
 - **Corte topológico**: se eliminan los resortes que cruzan el área barrida por la
   hoja. Los pedazos resultantes son cuerpos independientes de verdad.
-- **MediaPipe** sobre `requestVideoFrameCallback`, nunca dentro del render loop.
+- **Corte en espacio de cámara**, así que la órbita no lo rompe y se puede cortar
+  en profundidad.
+- **MediaPipe** sobre `requestVideoFrameCallback`, nunca dentro del render loop,
+  con hasta dos manos.
 
 La versión larga, con los porqués y los bugs que costaron encontrar, está en
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).

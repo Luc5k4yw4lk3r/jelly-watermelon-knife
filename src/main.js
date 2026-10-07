@@ -14,31 +14,44 @@ import { createJuice } from './render/juice.js';
 import { createBlade } from './input/blade.js';
 import { createMouse } from './input/mouse.js';
 import { createHandTracking } from './input/handTracking.js';
+import { createOrbit } from './input/orbit.js';
 
 import { sfx } from './audio/squish.js';
 import { createHud } from './ui/hud.js';
+import { createTuner } from './ui/tuner.js';
+
+/* ── render ──────────────────────────────────────────────────────────────── */
+
+/* La escena va primero: el corte y la colisión trabajan en la base de la cámara
+   (derecha / arriba / profundidad), que es lo que permite orbitar sin que el
+   plano de corte deje de coincidir con lo que se ve. */
+const canvas = document.getElementById('gl');
+const view = createScene(canvas);
 
 /* ── simulación ──────────────────────────────────────────────────────────── */
 
 const lat = createLattice();
 const topo = createTopology(lat);
 const shape = createShapeMatcher(lat);
-const solver = createSolver(lat, shape);
-const cutter = createCutter(lat);
+const solver = createSolver(lat, shape, view.basis);
+const cutter = createCutter(lat, view.basis);
 
-/* ── render ──────────────────────────────────────────────────────────────── */
+/* ── objetos de escena ───────────────────────────────────────────────────── */
 
-const view = createScene(document.getElementById('gl'));
 const jelly = createJellyMesh(lat, view.scene);
-const knife = createKnife(view.scene, view.camera, view.knifeParallax);
-const juice = createJuice(view.scene);
+const juice = createJuice(view.scene, view.basis);
+// un cuchillo por mano: el tracking reporta hasta dos
+const knives = [createKnife(view.scene, view.camera, view), createKnife(view.scene, view.camera, view)];
 
 view.onResize.push(juice.setPixelScale);
 
 /* ── entrada ─────────────────────────────────────────────────────────────── */
 
-const { blade, update: updateBlade, shouldCut } = createBlade();
+const hands = [createBlade(), createBlade()];
+const blades = hands.map((h) => h.blade);     // el solver recibe los estados
 const mouse = createMouse();
+const mousePoses = [null, null];
+const orbit = createOrbit(canvas, view.orbit);
 const hand = createHandTracking({
   onStatus: ({ source, tracking }) => {
     if (source === 'hand') hud.setSource('Mano', true);
@@ -66,6 +79,8 @@ const hud = createHud({
   onUseCamera: () => { sfx.init(); return useCamera(); },
   onUseMouse: () => { sfx.init(); useMouse(); },
 });
+
+createTuner({ onStiffnessChange: lat.refreshStiffness });
 
 function reset() {
   lat.reset();
@@ -95,29 +110,40 @@ function frame(now) {
   fpsEma += (1 / dt - fpsEma) * 0.08;
 
   if (view.adaptResolution(fpsEma)) fpsEma = 60;
+  orbit.update(dt);
 
-  const pose = source === 'hand'
-    ? hand.getPose(view.ndcToPlane)
-    : (source === 'mouse' ? mouse.getPose(view.ndcToPlane, { x: blade.gx, y: blade.gy }) : null);
-  updateBlade(dt, pose);
+  let poses;
+  if (source === 'hand') {
+    poses = hand.getPoses(view.ndcToPlane);
+  } else {
+    mousePoses[0] = source === 'mouse'
+      ? mouse.getPose(view.ndcToPlane, { x: blades[0].gx, y: blades[0].gy })
+      : null;
+    poses = mousePoses;   // el mouse maneja un solo cuchillo
+  }
 
-  // CORTE: una hoja rápida elimina todo resorte cuyo segmento cruce el área barrida
-  if (shouldCut()) {
-    const cut = cutter.cut(blade);
-    if (cut.severed) {
-      rebuildAfterTopologyChange();
-      juice.burst(cut, blade);
-      sfx.squish(cut.strength);
-      knife.flash();
+  for (let i = 0; i < hands.length; i++) {
+    const h = hands[i];
+    h.update(dt, poses[i] || null);
+
+    // CORTE: una hoja rápida elimina todo resorte cuyo segmento cruce el área barrida
+    if (h.shouldCut()) {
+      const cut = cutter.cut(h.blade);
+      if (cut.severed) {
+        rebuildAfterTopologyChange();
+        juice.burst(cut, h.blade);
+        sfx.squish(cut.strength);
+        knives[i].flash();
+      }
     }
   }
 
   acc += dt;
   let steps = 0;
-  while (acc >= DT && steps < 3) { solver.step(DT, blade); acc -= DT; steps++; }
+  while (acc >= DT && steps < 3) { solver.step(DT, blades); acc -= DT; steps++; }
   if (acc > DT) acc = 0;
 
-  knife.update(blade, dt);
+  for (let i = 0; i < knives.length; i++) knives[i].update(blades[i], dt);
   juice.update(dt);
   jelly.update(topo);
   jelly.material.uniforms.uTime.value = now * 0.001;

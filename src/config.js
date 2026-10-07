@@ -69,5 +69,8 @@ export const tune = {
   MAX_CUT_ROT: 0.18,        // rad/frame; una hoja que gira pica en vez de cortar
 };
 
+/** Copia de los valores de fábrica, para que el panel pueda restaurarlos. */
+export const tuneDefaults = { ...tune };
+
 /** Rigidez por tipo de resorte, en el orden de `SPRING_OFFSETS`. */
 export const stiffnessByType = () => [tune.K_STRUCT, tune.K_SHEAR, tune.K_BEND];

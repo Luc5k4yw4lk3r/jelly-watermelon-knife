@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { MAX_JUICE, FLOOR_Y, tune } from '../config.js';
 
 /** Gotas de jugo: pool de tamaño fijo con swap-remove, dibujado como Points. */
-export function createJuice(scene) {
+export function createJuice(scene, basis) {
   const jPos  = new Float32Array(MAX_JUICE * 3);
   const jVel  = new Float32Array(MAX_JUICE * 3);
   const jLife = new Float32Array(MAX_JUICE);
@@ -46,14 +46,20 @@ export function createJuice(scene) {
   scene.add(points);
 
   function spawn(x, y, z, bvx, bvy, n) {
+    const { rx, ry, rz, ux, uy, uz, fx, fy, fz } = basis;
     for (let i = 0; i < n && jCount < MAX_JUICE; i++) {
       const o = jCount * 3;
       jPos[o] = x; jPos[o + 1] = y; jPos[o + 2] = z;
       const sp = 0.5 + Math.random() * 1.3;
       const ang = Math.random() * Math.PI * 2;
-      jVel[o]     = bvx * 0.10 + Math.cos(ang) * sp * 0.5;
-      jVel[o + 1] = bvy * 0.10 + Math.sin(ang) * sp * 0.5 + 0.55;
-      jVel[o + 2] = 0.5 + Math.random() * 1.1;   // salpica hacia el espectador, saliendo del corte
+      // la dispersión se arma en la base de la cámara y se pasa a mundo, para
+      // que salpique siempre hacia el espectador aunque se haya orbitado
+      const va = bvx * 0.10 + Math.cos(ang) * sp * 0.5;
+      const vb = bvy * 0.10 + Math.sin(ang) * sp * 0.5;
+      const vf = 0.5 + Math.random() * 1.1;
+      jVel[o]     = va * rx + vb * ux - vf * fx;
+      jVel[o + 1] = va * ry + vb * uy - vf * fy + 0.55;
+      jVel[o + 2] = va * rz + vb * uz - vf * fz;
       jLife[jCount] = 0.75 + Math.random() * 0.45;
       jCount++;
     }

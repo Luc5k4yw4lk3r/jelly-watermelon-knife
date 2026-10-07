@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { BLADE_Z } from '../config.js';
 
 /**
  * El cuchillo 3D: solo dibujo. La pose la calcula input/blade.js; acá se traduce
  * a una transformación y se manejan el fundido y el destello.
  */
-export function createKnife(scene, camera, knifeParallax) {
+export function createKnife(scene, camera, view) {
+  const { knifeParallax, basis, planeToWorld } = view;
   const group = new THREE.Group();
   group.visible = false;
   scene.add(group);
@@ -57,17 +57,29 @@ export function createKnife(scene, camera, knifeParallax) {
 
   function flash() { flashAmount = 1; }
 
+  const _p = new THREE.Vector3();
+  const _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3();
+  const _m = new THREE.Matrix4();
+
   function update(blade, dt) {
     group.visible = blade.opacity > 0.01;
     if (group.visible) {
-      // se dibuja a BLADE_Z pero el corte pasa en el plano z=0: escalar la
+      // el cuchillo va BLADE_Z más cerca que el plano de corte: escalar su
       // posición respecto de la cámara deja ambos alineados en pantalla
-      group.position.set(
-        camera.position.x + (blade.x0 - camera.position.x) * knifeParallax,
-        camera.position.y + (blade.y0 - camera.position.y) * knifeParallax,
-        BLADE_Z,
-      );
-      group.rotation.z = Math.atan2(blade.diry, blade.dirx) - Math.PI / 2;
+      planeToWorld(blade.x0, blade.y0, 0, _p);
+      group.position.lerpVectors(camera.position, _p, knifeParallax);
+
+      // +Y local a lo largo de la hoja, +Z local mirando a la cámara
+      _y.set(
+        basis.rx * blade.dirx + basis.ux * blade.diry,
+        basis.ry * blade.dirx + basis.uy * blade.diry,
+        basis.rz * blade.dirx + basis.uz * blade.diry,
+      ).normalize();
+      _z.set(-basis.fx, -basis.fy, -basis.fz);
+      _x.crossVectors(_y, _z).normalize();
+      _m.makeBasis(_x, _y, _z);
+      group.quaternion.setFromRotationMatrix(_m);
+
       const sc = 0.85 + 0.15 * blade.opacity;
       group.scale.setScalar(sc * knifeParallax);
       for (let i = 0; i < materials.length; i++) materials[i].opacity = blade.opacity;

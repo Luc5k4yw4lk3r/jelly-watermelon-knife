@@ -7,10 +7,10 @@ import { FLOOR_Y, MAX_STEP_DISP, tune } from '../config.js';
  * relajación la rigidez no se propaga a través de las 10 capas de la lattice y
  * la sandía se despanzurra bajo su propio peso. Ver physics/shapeMatching.js.
  */
-export function createSolver(lat, shape) {
+export function createSolver(lat, shape, basis) {
   const { N, M, pos, prev, sprA, sprB, sprRest, sprK, sprAlive } = lat;
 
-  function step(dt, blade) {
+  function step(dt, blades) {
     const dt2 = dt * dt;
     const g = tune.GRAVITY * dt2;
     const damping = tune.DAMPING;
@@ -59,39 +59,56 @@ export function createSolver(lat, shape) {
     shape.apply();
     shape.dampSpin();
 
-    collideFloorAndBlade(blade);
+    collideFloorAndBlades(blades);
   }
 
-  function collideFloorAndBlade(bl) {
-    const useBlade = bl && bl.active && bl.opacity > 0.35;
-    const ax = useBlade ? bl.x0 : 0, ay = useBlade ? bl.y0 : 0;
-    const ex = useBlade ? bl.x1 - bl.x0 : 0, ey = useBlade ? bl.y1 - bl.y0 : 0;
-    const eLen2 = ex * ex + ey * ey || 1;
-    // una hoja rápida atraviesa en vez de empujar la gelatina
-    const R = useBlade && bl.speed > tune.CUT_SPEED ? tune.BLADE_R * 0.45 : tune.BLADE_R;
-    const R2 = R * R;
+  // parámetros de hasta dos hojas activas, aplanados para el bucle caliente
+  const bax = [0, 0], bay = [0, 0], bex = [0, 0], bey = [0, 0];
+  const blen2 = [1, 1], brad2 = [0, 0], brad = [0, 0];
+
+  function collideFloorAndBlades(blades) {
+    let nb = 0;
+    for (let i = 0; i < blades.length; i++) {
+      const bl = blades[i];
+      if (!bl || !bl.active || bl.opacity <= 0.35) continue;
+      bax[nb] = bl.x0; bay[nb] = bl.y0;
+      bex[nb] = bl.x1 - bl.x0; bey[nb] = bl.y1 - bl.y0;
+      blen2[nb] = bex[nb] * bex[nb] + bey[nb] * bey[nb] || 1;
+      // una hoja rápida atraviesa en vez de empujar la gelatina
+      const R = bl.speed > tune.CUT_SPEED ? tune.BLADE_R * 0.45 : tune.BLADE_R;
+      brad[nb] = R; brad2[nb] = R * R;
+      nb++;
+    }
     const pushClamp = tune.PUSH_CLAMP;
     const friction = 1 - tune.FLOOR_FRICTION;
+    const { rx, ry, rz, ux, uy, uz, tx, ty, tz } = basis;
     const bounce = tune.FLOOR_BOUNCE;
 
     for (let p = 0; p < N; p++) {
       const o = p * 3;
 
-      if (useBlade) {
-        // punto más cercano sobre el segmento de la hoja, en el plano XY: el
-        // cuchillo es un prisma que atraviesa toda la profundidad, así que se
-        // ignora Z a propósito
-        const px = pos[o] - ax, py = pos[o + 1] - ay;
-        let t = (px * ex + py * ey) / eLen2;
-        t = t < 0 ? 0 : (t > 1 ? 1 : t);
-        const dx = px - ex * t, dy = py - ey * t;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < R2) {
+      if (nb) {
+        // punto más cercano sobre el segmento de cada hoja, proyectado al plano
+        // de corte: el cuchillo es un prisma que atraviesa toda la profundidad,
+        // así que el eje hacia la cámara se ignora a propósito
+        const wx = pos[o] - tx, wy = pos[o + 1] - ty, wz = pos[o + 2] - tz;
+        const a = wx * rx + wy * ry + wz * rz;
+        const b = wx * ux + wy * uy + wz * uz;
+        for (let i = 0; i < nb; i++) {
+          const px = a - bax[i], py = b - bay[i];
+          let t = (px * bex[i] + py * bey[i]) / blen2[i];
+          t = t < 0 ? 0 : (t > 1 ? 1 : t);
+          const dx = px - bex[i] * t, dy = py - bey[i] * t;
+          const d2 = dx * dx + dy * dy;
+          if (d2 >= brad2[i]) continue;
           const d = Math.sqrt(d2) || 1e-6;
-          let push = R - d;
+          let push = brad[i] - d;
           if (push > pushClamp) push = pushClamp;
-          pos[o]     += dx / d * push;
-          pos[o + 1] += dy / d * push;
+          // el empuje vuelve al mundo sobre los ejes derecha/arriba de la cámara
+          const sx = dx / d * push, sy = dy / d * push;
+          pos[o]     += sx * rx + sy * ux;
+          pos[o + 1] += sx * ry + sy * uy;
+          pos[o + 2] += sx * rz + sy * uz;
         }
       }
 
