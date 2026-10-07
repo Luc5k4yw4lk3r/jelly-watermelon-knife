@@ -2,8 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Sandía de gelatina con física soft-body propia, cortable con un cuchillo 3D que
-sigue la mano por webcam. Sin motor de física ni librerías de partículas: todo a
+Sandía de gelatina con física soft-body propia, cortable de dos formas: un
+cuchillo 3D que sigue la mano por webcam, o una cuchilla de carnicero que cae
+sobre una línea dibujada. Sin motor de física ni librerías de partículas: todo a
 mano en typed arrays, con `three` como única dependencia de runtime.
 
 El código, los comentarios, la documentación y los mensajes de commit están en
@@ -25,8 +26,13 @@ La suite de navegador tarda ~4 min porque corre en serie y el navegador renderiz
 por software. Para iterar sobre lógica, usá `--project=node`.
 
 Banderas de URL para desarrollo: `?dev` expone `window.__dev` (pedazos,
-telemetría de corte, estado de las hojas, planaridad de la cara de corte, pausa de
-la simulación) y `?replay=<url>` reproduce una sesión de landmarks grabada.
+telemetría de corte, estado de las hojas y de la mecánica, componentes conexas,
+planaridad de la cara de corte, pausa de la simulación), `?replay=<url>` reproduce
+una sesión de landmarks grabada y `?mech=<id>` arranca en una mecánica.
+
+Para depurar un corte que "se ve y no separa", `__dev.components` lista los tamaños
+de las componentes conexas vivas. El contador de pedazos ignora las de menos de 10
+partículas; eso las muestra todas.
 
 `playwright.config.js` usa `channel: 'chrome'` (el Chrome del sistema) en vez del
 Chromium que trae Playwright, que **no tiene build para Ubuntu 20.04**. En CI se
@@ -68,11 +74,29 @@ initialization`) que no es obvio leyendo el stack.
 
 `cutter.cut(blade)` es **puro**: corta resortes y devuelve qué pasó. Reconstruir
 topología, lanzar jugo, sonar el squish, destellar la hoja y actualizar el HUD son
-decisiones de `main.js`. No volver a meter esos efectos dentro del cutter.
+decisiones de `main.js` —concretamente de `onCut`, que es el único lugar donde
+pasan—. No volver a meter esos efectos dentro del cutter ni dentro de una mecánica.
 
-`docs/ARCHITECTURE.md` tiene los porqués en detalle y `docs/BACKLOG.md` lo que
-falta, con el contexto ya averiguado de cada ítem — convienen antes de empezar algo
-nuevo. Lo que sigue es lo que hay que saber antes de tocar nada.
+### Mecánicas
+
+Una **mecánica** es una forma de cortar: `enter / exit / update(dt, io) / blades /
+dispose`, en `src/mechanics/`. Comparten física, malla, jugo y la capa de puntero;
+se diferencian en cómo el gesto se vuelve un corte. Se construyen todas al arrancar
+y se prenden con `enter`/`exit`, porque cambiar de mecánica no puede pagar la
+creación de mallas en el frame del cambio.
+
+La lattice no se toca al cambiar, así que **los pedazos se conservan solos**.
+
+Lo que tiene lógica va en módulos **puros**, como ya se hizo con `handPose`:
+`lineKnife/fsm.js` (los estados y los tiempos) y `lineKnife/cutPlane.js` (la base
+sintética y el quad) se prueban en Node, en segundos. Y como la lattice y el cutter
+tampoco tocan el DOM, **el corte de verdad también se prueba ahí**: `melon()` en
+`tests/mechanics.node.spec.js` arma una sandía y la corta sin navegador.
+
+`docs/ARCHITECTURE.md` tiene los porqués en detalle, `docs/BACKLOG.md` lo que falta
+con el contexto ya averiguado de cada ítem, y `docs/specs/` las specs de las
+features: requisitos numerados, el test que prueba cada uno, y los desvíos con el
+número que los justifica. Conviene leerlos antes de empezar algo nuevo. Lo que sigue es lo que hay que saber antes de tocar nada.
 
 ### El shape matching no es opcional
 
@@ -108,6 +132,34 @@ La malla tiene **todas** las caras de **todas** las celdas pre-construidas; solo
 dibujan las visibles, empaquetadas desde el slot 0. Una celda muere si pierde
 cualquiera de sus 12 aristas estructurales, y las caras de las vecinas que quedan
 sin par pasan a ser visibles. El shader las colorea por radio.
+
+### Cortar por un plano que no es el de la cámara
+
+`cut()` acepta opciones **por llamada**, con los defaults de siempre, así que el
+camino del tajo libre no cambia. Tres cosas que no son obvias:
+
+- **`kerf`.** Acota el barrido perpendicular al eje de la hoja para que un cuchillo
+  que va de costado rebane en vez de excavar. La cuchilla de línea baja
+  perpendicular a su propio filo: con el kerf de siempre cortaría una banda de 8 cm
+  por llamada y necesitaría decenas de frames seguidos. Hace **una sola llamada**
+  con el kerf desactivado, y así el corte no depende del framerate.
+- **`crossDepth`.** Un barrido y un plano no son el mismo predicado. "Cae dentro del
+  área" lo cumple cada resorte cuando el quad es el plano entero. Un corte por plano
+  quiere lo que lo **cruza**. Darle grosor al plano se probó y es peor (ver la spec).
+- **`juiceBasis`.** De qué lado salpica el jugo lo decide la cámara, no el plano de
+  corte; con la base sintética las gotas salían de costado.
+
+El alto del corte (`CUT_TOP` / `CUT_BOTTOM`) **no** depende de dónde flota la
+cuchilla. Atarlo a la altura de espera deja el quad por debajo de la coronilla de la
+fruta y las mitades quedan unidas por un puente fino: se ve partida y es una sola
+pieza.
+
+### Empujar partículas
+
+La velocidad es implícita en `pos - prev`: para agregar velocidad se **resta de
+`prev`** y `pos` no se toca. Y el número es más chico de lo que parece: la velocidad
+se multiplica por `DAMPING` en cada paso, así que un empujón de una sola vez recorre
+`impulso / (1 - DAMPING)` = **122 veces** su tamaño antes de frenar.
 
 ### config.js
 
@@ -193,6 +245,8 @@ aserciones exactas van sobre `restRms` (posiciones de reposo, sin deformación).
 pantalla, el encuadre en HiDPI y el replay. Lo que sigue va igual a mano:
 
 - 60 fps en reposo abriendo `dist/index.html` con `file://`, y consola limpia.
+- **El trazo con la mano**: la cuchilla de línea se probó entera con mouse, nunca
+  con una pinza real.
 - **El tracking con una mano real.** Nunca se validó contra hardware: todo el
   camino de cámara se probó con un stream sintético, que ejercita MediaPipe
   completo (modelo, delegate GPU, `detectForVideo`, preview) pero nunca produce una

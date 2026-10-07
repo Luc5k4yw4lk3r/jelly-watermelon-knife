@@ -1,8 +1,8 @@
 # Spec — mecánica «Cuchillo» (dibujar línea y tajar)
 
-> **Estado:** borrador, antes de implementar. Esta spec es la fuente de verdad: lo
-> que no está acá no es requisito, y si la implementación la contradice se corrige
-> **la spec** en el mismo commit, con el desvío escrito y justificado.
+> **Estado:** implementada en v0.4.0. Esta spec es la fuente de verdad: lo que no
+> está acá no es requisito, y cuando la implementación la contradijo se corrigió
+> **la spec**, con el desvío escrito y justificado (§4).
 
 Versión objetivo: **v0.4.0**. Identificador de la mecánica: `lineKnife`.
 Nombre visible: **Cuchillo**.
@@ -18,8 +18,9 @@ Esta suma la opción opuesta, **apuntar y confirmar**: se dibuja una línea sobr
 fruta y una cuchilla de carnicero baja y parte por un plano vertical. Sin umbral de
 velocidad, el corte cae exactamente donde se apuntó.
 
-Las dos conviven y se eligen en caliente. `handKnife` sigue siendo el default y **no
-cambia en nada**: eso es un requisito, no una expectativa.
+Las dos conviven y se eligen en caliente. `handKnife` —«Tajo libre» en la UI—
+sigue siendo el default y **no cambia en nada**: eso es un requisito, no una
+expectativa.
 
 ---
 
@@ -139,15 +140,15 @@ IDLE → AIMING → STRIKING → RETRACTING → IDLE
 | **AC9** | Soltar con `|AB| ≤ MIN_CUT_LEN` vuelve a IDLE sin pedir corte. | `[N]` «una línea corta no corta» | R27 |
 | **AC10** | Un trazo válido recorre `IDLE→AIMING→STRIKING→RETRACTING→IDLE` y pide **exactamente un** corte. | `[N]` «el ciclo completo pide un solo corte» | R26, R29, R39 |
 | **AC11** | Presionar durante STRIKING o RETRACTING no abre un apuntado nuevo. | `[N]` «el input nuevo no interrumpe el golpe» | R29 |
-| **AC12** | El corte se pide en el frame en que la hoja **cruza** la altura del centro, incluso si un solo frame la lleva de arriba de la fruta a abajo del piso. | `[N]` «el corte se dispara por cruce, no por cercanía» | R28 |
+| **AC12** | El corte se pide con la hoja todavía dentro de la fruta aunque cada frame la mueva ~0.7 unidades, y no se pierde ni con un frame enorme. | `[N]` «el corte se dispara por cruce…» · «ni con un frame enorme se pierde el corte» | R28 |
 | **AC13** | La base de corte es ortonormal, su normal es **horizontal**, y A y B están **sobre** el plano (distancia ≈ 0 para los dos). | `[N]` «el plano de corte contiene AB y es vertical» | R30 |
 | **AC14** | Un punto más allá de B por más de `CUT_MARGIN` cae **fuera** del quad barrido. | `[N]` «el corte no es un plano infinito» | R31 |
 | **AC15** | Con el mouse: arrastrar sobre la fruta y soltar deja **2 pedazos**. | `[B]` «arrastrar y soltar parte la sandía en dos» | R21, R22, R26, R32 |
 | **AC16** | Con el mouse: un arrastre más corto que `MIN_CUT_LEN` deja 1 pedazo y 0 cortes. | `[B]` «un trazo corto no corta» | R27 |
 | **AC17** | Después del corte, la cara expuesta mide planaridad como cualquier otra (`cutFacePlanarity().points > 0`). | `[B]` «la cara de corte queda expuesta» | R32 |
-| **AC18** | Las dos mitades se separan: la distancia entre sus centroides crece tras el golpe. | `[B]` «las mitades se abren» | R34 |
-| **AC19** | Un segundo trazo sobre una mitad la vuelve a partir. | `[B]` «una mitad se puede volver a cortar» | R38 |
-| **AC20** | Con `MAX_PIECES` alcanzado, un trazo válido no cambia el contador. | `[N]` «el límite de piezas veta el corte» | R36 |
+| **AC18** | Cada mitad gana velocidad en el sentido de su lado del plano, y `pos` no se toca. | `[N]` «las mitades reciben el empujón en sentidos opuestos» | R34 |
+| **AC19** | Un segundo trazo vuelve a partir, y un tercero también. | `[N]` «cada mitad se puede volver a cortar» · `[B]` «una mitad se puede volver a cortar» | R38 |
+| **AC20** | Con `MAX_PIECES` alcanzado el golpe se anima igual pero no corta. | `[N]` «el límite de piezas veta el corte» | R36 |
 | **AC21** | La cuchilla flota horizontal, sigue al puntero en XZ y proyecta sombra. | `[M]` | R18, R19 |
 | **AC22** | La línea guía, la cruz y el indicador de pinch se ven y se leen. | `[M]` | R15, R20, R23 |
 | **AC23** | La alineación y el golpe se sienten como se pidieron: lerp de ~`ALIGN_MS`, golpe pesado con ease-in, retirada. | `[M]` | R24, R26, R37 |
@@ -155,6 +156,9 @@ IDLE → AIMING → STRIKING → RETRACTING → IDLE
 | **AC25** | ~60 fps con ~20 piezas, y consola limpia abriendo `dist/index.html` con `file://`. | `[M]` | R40 |
 | **AC26** | Órbita con botón derecho, Shift+izquierdo y flechas mientras el izquierdo dibuja. | `[M]` | R17 |
 | **AC27** | Pinch con una mano real, y con dos. | `[M]` | R16, R13 |
+| **AC28** | El corte cubre la fruta entera, flote donde flote la cuchilla. | `[N]` «el corte cubre la fruta entera…» | R30 |
+| **AC29** | Entrar a la mecánica con el botón ya apretado no abre un trazo. | `[N]` «entrar a la mecánica con el botón ya apretado…» | R39 |
+| **AC30** | La hoja baja, pasa el piso y vuelve a subir. | `[N]` «la hoja baja, atraviesa el piso y vuelve a subir» | R26, R37 |
 
 ### 3.1 Requisitos sin test automático
 
@@ -217,7 +221,39 @@ El solver colisiona las hojas como cápsulas en espacio de cámara extruidas por
 la profundidad. Una cuchilla metida ahí colisionaría a toda profundidad, en el lugar
 equivocado. La cuchilla corta; no empuja. El spec original no pide que empuje.
 
-### 4.6 El selector va en el HUD, no en el panel de tuneo
+### 4.6 Un barrido y un plano no son el mismo predicado
+
+El cutter severa los resortes que **caen dentro** del área barrida, ignorando el
+eje de profundidad porque la hoja es un prisma que atraviesa la escena. Para un
+barrido —en pantalla, una astilla fina— eso es correcto. Para un plano no: el quad
+cubre la fruta entera en las dos coordenadas que quedan, así que "caer adentro" lo
+cumple **cada** resorte, y la sandía se desintegraba en vez de partirse en dos.
+
+El corte por plano pide los resortes que lo **cruzan**. Es la opción `crossDepth`.
+
+Se probó además darle grosor al plano, cortando todo lo que tocara una losa de
+±0.04 a su alrededor, por si quedaban resortes apoyados sobre el plano uniendo las
+mitades. **Medido, es peor:** el mismo tajo pasa de 1030 a 1704 resortes cortados y
+empieza a soltar partículas sueltas, porque también se lleva los que corren
+paralelos al plano. Revertido.
+
+### 4.7 El alto del corte no depende de dónde flota la cuchilla
+
+Atar el techo del quad a `HOVER_H` parece natural y es un error: bajar esa altura
+por encuadre dejó el quad por debajo de la coronilla de la fruta, y las mitades
+quedaron unidas por un puente fino de resortes. Se veía partida y seguía siendo una
+sola pieza. El alto del corte lo fijan `CUT_TOP` y `CUT_BOTTOM`, que dependen de
+dónde puede haber gelatina, no de la puesta en escena.
+
+### 4.8 La cámara baja al entrar
+
+La cámara de arranque mira el plano de apuntado desde **~6 grados**: está 0.46
+unidades por encima y a 4.5 de distancia. Sobre un plano visto así, mover el puntero
+un píxel desplaza el punto apuntado decenas de centímetros, y dibujar una línea es
+imposible. Al entrar a esta mecánica la cámara baja a ~35 grados, con transición, y
+suelta el objetivo en cuanto lo alcanza para no pelear con la órbita del usuario.
+
+### 4.9 El selector va en el HUD, no en el panel de tuneo
 
 El panel `D` está oculto por CSS debajo de 560 px de ancho. Un control de juego ahí
 sería inalcanzable en móvil.
@@ -230,12 +266,12 @@ Nombres del spec original → claves reales.
 
 | Spec | Clave | Default | Dónde |
 |---|---|---|---|
-| `knifeHoverHeight` | `HOVER_H` | 1.45 | `tune` |
+| `knifeHoverHeight` | `HOVER_H` | 0.95 | `tune` |
 | `alignDurationMs` | `ALIGN_MS` | 170 | `tune` |
 | `strikeDurationMs` | `STRIKE_MS` | 340 | `tune` |
 | `retractDurationMs` | `RETRACT_MS` | 250 | `tune` |
 | `minCutLength` | `MIN_CUT_LEN` | 0.35 | `tune` |
-| `separationImpulse` | `SEP_IMPULSE` | 0.02 | `tune` |
+| `separationImpulse` | `SEP_IMPULSE` | 0.0015 | `tune` |
 | `pinchOn` | `PINCH_ON` | 0.25 | `tune` |
 | `pinchOff` | `PINCH_OFF` | 0.40 | `tune` |
 | `oneEuroMinCutoff` | `EURO_MIN_CUTOFF` | 1.6 | `tune` |
@@ -244,8 +280,14 @@ Nombres del spec original → claves reales.
 | — | `CUT_MARGIN` | 0.06 | `tune` |
 | `defaultMechanic` | `DEFAULT_MECHANIC` | `'handKnife'` | estructural |
 
-`SEP_IMPULSE` tiene techo: `MAX_STEP_DISP = 0.09` recorta el desplazamiento total por
-paso y de paso escala la velocidad que la partícula ya traía.
+`SEP_IMPULSE` es mucho más chico de lo que parece: la velocidad se multiplica por
+`DAMPING = 0.9918` en cada paso, así que un empujón de una sola vez recorre
+`impulso / (1 − DAMPING)` = **122 veces** su tamaño antes de frenar. Con 0.02 las
+mitades salían de cuadro. Y tiene techo: `MAX_STEP_DISP = 0.09` recorta el
+desplazamiento total por paso.
+
+`HOVER_H` bajó de 1.45 a 0.95 por encuadre: más arriba, la cuchilla se sale por
+el borde de arriba de la pantalla.
 
 ---
 
@@ -256,42 +298,46 @@ Se completa a medida que se implementa. `—` = todavía no.
 | Requisito | Criterios | Estado |
 |---|---|---|
 | R1 | AC1 | ✔ suite completa en verde tras el traslado |
-| R2 | AC2 | — |
-| R3 | AC3 | — |
-| R4 | AC3 | — |
-| R5 | AC3 | — |
-| R6 | AC2 | — |
+| R2 | AC2 | ✔ |
+| R3 | AC3 | ✔ |
+| R4 | AC3 | ✔ |
+| R5 | AC3 | ✔ |
+| R6 | AC2 | ✔ |
 | R7 | estructural | ✔ las mecánicas reciben el mismo `io` |
-| R8 | AC6, AC15 | parcial: AC6 ✔ |
-| R9 | AC15, AC16 | — |
+| R8 | AC6, AC15 | ✔ |
+| R9 | AC15, AC16 | ✔ |
 | R10 | AC6 | ✔ |
 | R11 | AC5 | ✔ |
 | R12 | AC4 | ✔ (los dos sabotajes dieron rojo) |
-| R13 | AC27 `[M]` | — |
-| R14 | AC7 | parcial: el puntero suelta al perder la mano |
-| R15 | AC22 `[M]` | — |
-| R16 | AC27 `[M]` | — |
-| R17 | AC26 `[M]` | — |
-| R18 | AC21 `[M]` | — |
-| R19 | AC21 `[M]` | — |
-| R20 | AC22 `[M]` | — |
-| R21 | AC15 | — |
-| R22 | AC15 | — |
-| R23 | AC22 `[M]` | — |
-| R24 | AC23 `[M]` | — |
-| R25 | AC8 | — |
-| R26 | AC10, AC15 | — |
-| R27 | AC9, AC16 | — |
-| R28 | AC12 | — |
-| R29 | AC10, AC11 | — |
-| R30 | AC13 | — |
-| R31 | AC14 | — |
-| R32 | AC15, AC17 | — |
-| R33 | AC24 `[M]` | — |
-| R34 | AC18 | — |
-| R35 | AC24 `[M]` | — |
-| R36 | AC20 | — |
-| R37 | AC23 `[M]` | — |
-| R38 | AC19 | — |
-| R39 | AC10 | — |
-| R40 | AC25 `[M]` | — |
+| R13 | AC27 `[M]` | ⏳ sin webcam |
+| R14 | AC7 | ✔ |
+| R15 | AC22 `[M]` | ✔ a ojo: la cruz se cierra y se pone roja |
+| R16 | AC27 `[M]` | ⏳ sin webcam |
+| R17 | AC26 `[M]` | ✔ a ojo |
+| R18 | AC21 `[M]` | ✔ a ojo |
+| R19 | AC21 `[M]` | ✔ a ojo |
+| R20 | AC22 `[M]` | ✔ a ojo |
+| R21 | AC15 | ✔ |
+| R22 | AC15 | ✔ |
+| R23 | AC22 `[M]` | ✔ a ojo |
+| R24 | AC23 `[M]` | ✔ a ojo |
+| R25 | AC8 | ✔ |
+| R26 | AC10, AC15, AC30 | ✔ |
+| R27 | AC9, AC16 | ✔ |
+| R28 | AC12 | ✔ (el primer test no distinguía cruce de cercanía; se rehízo) |
+| R29 | AC10, AC11 | ✔ |
+| R30 | AC13, AC28 | ✔ |
+| R31 | AC14 | ✔ |
+| R32 | AC15, AC17 | ✔ |
+| R33 | AC24 `[M]` | ✔ gratis: el corte no toca `pos`, `prev` ni `rest` |
+| R34 | AC18 | ✔ |
+| R35 | AC24 `[M]` | ✔ a ojo |
+| R36 | AC20 | ✔ |
+| R37 | AC23 `[M]`, AC30 | ✔ |
+| R38 | AC19 | ✔ |
+| R39 | AC10, AC29 | ✔ |
+| R40 | AC25 `[M]` | ⏳ sin medir con 20 piezas |
+
+**Pendientes reales**, no omisiones: R13 y R16 necesitan una webcam, y heredan el
+pendiente mayor del proyecto (`docs/BACKLOG.md`, ítems 1 y 2). R40 no se midió con
+20 piezas. Están anotados ahí, no acá.

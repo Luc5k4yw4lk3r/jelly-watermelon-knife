@@ -105,6 +105,52 @@ cambia es la base.
 Esto es lo que permite orbitar sin que el plano de corte deje de coincidir con lo
 que se ve, y de paso habilita cortar un pedazo en profundidad.
 
+### Cortar por un plano del mundo, con el mismo cutter
+
+La segunda mecánica corta por un plano **vertical** que contiene la línea dibujada,
+que no tiene nada que ver con la cámara. No hizo falta un cutter nuevo: el cutter
+proyecta a una base y corta lo que cruza un quad en esas dos coordenadas, así que
+alcanza con darle **otra base**:
+
+```
+derecha     = dirección horizontal de A→B   → `pa` es distancia sobre AB
+arriba      = +Y del mundo                  → `pb` es altura del mundo
+profundidad = derecha × arriba              → la normal del plano de corte
+origen      = A, a la altura del plano de apuntado
+```
+
+El eje de profundidad es el que el cutter ignora, así que el corte atraviesa la
+fruta de lado a lado por ese plano. Y como el quad está acotado sobre `pa`, el corte
+no es un plano infinito: más allá de A y de B no se toca nada, sin filtros por pieza
+ni AABB. Los detalles y lo que se descartó están en
+[specs/cuchillo-de-linea.md](specs/cuchillo-de-linea.md).
+
+Tres cosas que esto enseñó, y que son el mismo error con tres caras:
+
+- **Un barrido y un plano no son el mismo predicado.** El cutter severa lo que *cae
+  dentro* del área barrida. Para un barrido —en pantalla, una astilla fina— está
+  bien. Cuando el quad **es** el plano entero, "caer adentro" lo cumple cada resorte
+  y la sandía se desintegra. Un plano quiere lo que lo **cruza**.
+- **El kerf es una defensa del barrido, no una propiedad del corte.** Acota la
+  componente perpendicular al eje de la hoja. Una cuchilla que baja de plano es 100%
+  componente perpendicular: con el kerf de siempre corta una banda de 8 cm por
+  llamada. Hace una sola llamada con el kerf desactivado.
+- **El alto del corte no puede colgar de la puesta en escena.** Estuvo atado a la
+  altura a la que flota la cuchilla; bajarla por encuadre dejó el quad por debajo de
+  la coronilla de la fruta, y las mitades quedaron unidas por un puente fino de
+  resortes. Se veía partida y era una sola pieza.
+
+### Empujar un pedazo
+
+La velocidad es implícita en `pos - prev`: para agregar velocidad se **resta de
+`prev`** y `pos` no se toca. Mover `pos` abre un hueco geométrico instantáneo, que
+es otra cosa.
+
+El número engaña: la velocidad se multiplica por `DAMPING = 0.9918` en cada paso,
+así que un empujón de una sola vez recorre `impulso / (1 - DAMPING)` = **122 veces**
+su tamaño antes de frenar. Un valor que suena diminuto manda las mitades fuera de
+cuadro.
+
 ### Suavizado de la cara de corte
 
 Un corte diagonal sobre una rejilla alineada a los ejes siempre queda en escalera.
@@ -210,6 +256,35 @@ material. `geometry.dispose()` lo arreglaba, lo que confirmó el diagnóstico. L
 solución real es mantener el objeto con `visible = false` mientras el pool está
 vacío, así sus buffers se crean en un frame que sí tiene datos.
 
+## Mecánicas
+
+Una mecánica es una forma de cortar: `enter / exit / update(dt, io) / blades /
+dispose`. Comparten física, malla, jugo y la capa de puntero; lo único propio es
+cómo el gesto se vuelve un corte. Ninguna decide qué pasa **después** de un corte:
+eso es `onCut` en `main.js`, y vive en un solo lugar, igual que el cutter es puro.
+
+Cambiar de mecánica no toca la lattice, así que los pedazos se conservan solos.
+
+- **Tajo libre** (`handKnife`) — el cuchillo sigue la mano o el puntero todo el
+  tiempo. Lento empuja, rápido rebana. Es un gesto de destreza.
+- **Cuchillo** (`lineKnife`) — se dibuja una línea y una cuchilla de carnicero baja
+  y parte por el plano vertical que la contiene. Sin umbral de velocidad: el corte
+  cae donde se apuntó.
+
+Lo que tiene lógica va en módulos puros, como con `handPose`: la máquina de estados
+y la geometría del plano se prueban en Node en milisegundos.
+
+La cuchilla **no** entra en el array de hojas del solver. Ahí las hojas se colisionan
+como cápsulas en espacio de cámara extruidas por toda la profundidad, que no es
+dónde está la cuchilla; además `knives[i]` y `blades[i]` van emparejados por índice.
+La cuchilla corta, no empuja.
+
+La cámara de arranque mira el plano de apuntado desde **~6 grados** —está 0.46
+unidades por encima y a 4.5 de distancia—. Sobre un plano visto así, un píxel de
+puntero son decenas de centímetros de mundo. Al entrar a la mecánica de línea la
+cámara baja a ~35 grados y suelta el objetivo en cuanto lo alcanza, para no pelear
+con la órbita.
+
 ## Tracking
 
 MediaPipe Tasks Vision con delegate GPU (con fallback a CPU si el driver lo
@@ -303,6 +378,24 @@ El primer sabotaje también enseñó algo: el test de HiDPI **pasaba con el bug
 puesto**, porque Playwright corre con `deviceScaleFactor: 1` y con DPR 1 el buffer
 coincide con el CSS por casualidad. Un test que no reproduce la condición del bug
 es decoración.
+
+Y volvió a pasar con la mecánica de línea. El test de "el corte se dispara al cruzar
+el centro, no al estar cerca" **pasaba igual** con el disparo por cercanía puesto,
+porque la red de seguridad del final de la animación cobraba el corte de todos
+modos. El test comprobaba que el corte ocurriera, que es lo que las dos versiones
+hacen; lo que las distingue es **cuándo**. Rehecho para medir eso —con la hoja
+todavía dentro de la fruta—, se pone rojo.
+
+### Una métrica que depende de la máquina no es una aserción
+
+`cutFacePlanarity().rms` se mide sobre la malla deformada, así que incluye el
+bamboleo de la gelatina. La espera después del corte es de **tiempo real**: a 60 fps
+se simulan ~70 pasos de física y a 5 fps unos pocos. Medido en 8 corridas, da
+0.24–0.35 cuando el navegador va lento y 0.026–0.042 cuando va rápido.
+
+El umbral que había fallaba 1 de cada 3 corridas sin que nada estuviera mal. La
+aserción que sobrevive es que la métrica esté viva; la que compara antes y después
+es `restRms`, que se mide sobre posiciones de reposo y sale idéntica siempre.
 
 ## Performance
 
