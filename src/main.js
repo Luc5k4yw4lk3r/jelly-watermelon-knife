@@ -5,6 +5,8 @@ import { createTopology } from './physics/topology.js';
 import { createShapeMatcher } from './physics/shapeMatching.js';
 import { createSolver } from './physics/solver.js';
 import { createCutter } from './physics/cutting.js';
+import { createVolumeMeter } from './physics/volume.js';
+import { createPieceTracker } from './physics/pieces.js';
 
 import { createScene } from './render/scene.js';
 import { createJellyMesh } from './render/jellyMesh.js';
@@ -18,6 +20,10 @@ import { createReplay } from './input/replay.js';
 import { createRecorder } from './input/recorder.js';
 
 import { MECHANICS, mechanicById } from './mechanics/registry.js';
+
+import { createScoreboard } from './score/cutScore.js';
+import { createCutLabels } from './ui/cutLabels.js';
+import { createCutMeter } from './score/cutMeter.js';
 
 import { sfx } from './audio/squish.js';
 import { createHud } from './ui/hud.js';
@@ -39,6 +45,8 @@ const topo = createTopology(lat);
 const shape = createShapeMatcher(lat);
 const solver = createSolver(lat, shape, view.basis);
 const cutter = createCutter(lat, view.basis);
+const volume = createVolumeMeter(lat);
+const pieces = createPieceTracker(lat);
 
 /* ── objetos de escena ───────────────────────────────────────────────────── */
 
@@ -94,17 +102,21 @@ async function useReplay(url) {
 /**
  * Los efectos de un corte viven **acá y solo acá**: el cutter es puro y las
  * mecánicas deciden *cuándo* cortar, no qué pasa después.
+ *
+ * `plane` es opcional: si la mecánica cortó por un plano, se mide la precisión
+ * del reparto. El tajo libre corta con un cuadrilátero barrido, no con un
+ * plano, así que ahí no hay un split que medir y no se inventa un número.
  */
-function onCut(cut, blade, knife) {
+function onCut(cut, blade, knife, plane) {
   cutEvents++; severedTotal += cut.severed;
-  rebuildAfterTopologyChange();
+  rebuildAfterTopologyChange(plane);
   juice.burst(cut, blade);
   sfx.squish(cut.strength);
   if (knife) knife.flash();
 }
 
 const ctx = {
-  view, lat, topo, shape, jelly, juice, cutter, solver,
+  view, lat, topo, shape, jelly, juice, cutter, solver, volume,
   onCut,
   getPieces: () => pieceCount,
 };
@@ -139,6 +151,8 @@ const hud = createHud({
   onUseMouse: () => { sfx.init(); useMouse(); },
   mechanics: MECHANICS,
   onMechanic: setMechanic,
+  onPractice: () => { practiceAcc = 0; },
+  onStatsReset: () => { scoreboard.reset(); hud.setStats(scoreboard.stats()); },
 });
 hud.setMechanic(mechId);
 
@@ -148,6 +162,8 @@ function reset() {
   cutEvents = 0; severedTotal = 0;
   lat.reset();
   juice.clear();
+  pieces.reset();
+  labels.clear();
   rebuildAfterTopologyChange();
   hud.toast('Sandía nueva');
 }
@@ -155,11 +171,22 @@ function reset() {
 /** El corte cambia la topología; todo lo que depende de ella se rehace acá. */
 let pieceCount = 1;
 let cutEvents = 0, severedTotal = 0;   // telemetría: la lee ?dev
-function rebuildAfterTopologyChange() {
+function rebuildAfterTopologyChange(plane) {
   topo.rebuild();
   pieceCount = shape.rebuild();
+  const splits = pieces.rebuild();
   jelly.rebuild(topo);
   hud.setPieces(pieceCount);
+
+  /* Es el único punto por el que pasan todos los cambios de topología, así que
+     medir acá cubre las dos mecánicas y el reset sin que ninguna lo sepa. */
+  if (plane && splits.length) {
+    const played = meter.measure(splits, plane, source);
+    if (played) {
+      labels.show(played);
+      hud.setStats(scoreboard.stats());
+    }
+  }
 }
 
 /* ── frame loop ──────────────────────────────────────────────────────────── */
@@ -167,17 +194,79 @@ function rebuildAfterTopologyChange() {
 let acc = 0, lastT = performance.now(), fpsEma = 60, physMs = 0;
 
 installDevtools({
-  lat, topo, jelly, juice, replay,
+  lat, topo, jelly, juice, replay, pieces,
   getBlades: () => mech.blades,
   getMechanic: () => mechId,
   getMechanicState: () => (mech.devState ? mech.devState() : null),
   getPieces: () => pieceCount,
   getPhysMs: () => physMs,
   getCuts: () => ({ events: cutEvents, severed: severedTotal }),
+  cutLine: (ax, az, bx, bz) => (mech.devCut ? mech.devCut(ax, az, bx, bz) : null),
+  /* Mide **ahora** el reparto de una línea, sin cortar. Es el mismo camino que
+     usa el modo práctica, y lo que permite comprobar que la medición no se mueve
+     con el bamboleo: leer dos veces el puntaje guardado no probaría nada, porque
+     es un registro del historial y no cambia aunque la medición fuera inestable. */
+  splitAt: (ax, az, bx, bz) => {
+    let dx = bx - ax, dz = bz - az;
+    const len = Math.hypot(dx, dz);
+    if (!(len > 1e-6)) return null;
+    dx /= len; dz /= len;
+    const [p, q] = volume.splitByPlane(ax, view.target.y, az, -dz, 0, dx);
+    const t = p + q;
+    return [(100 * p) / t, (100 * q) / t];
+  },
+  getScore: () => ({
+    stats: scoreboard.stats(),
+    last: scoreboard.history[scoreboard.history.length - 1] || null,
+  }),
 });
+
+const scoreboard = createScoreboard();
+const meter = createCutMeter({
+  lat, volume, pieces, scoreboard,
+  // la comprobación cruzada de volumen solo corre con ?dev: cuesta una pasada más
+  onWarn: DEV ? (msg) => console.warn('[score]', msg) : null,
+});
+const labels = createCutLabels(view);
 
 const replayUrl = new URLSearchParams(location.search).get('replay');
 if (replayUrl) useReplay(replayUrl).catch((e) => hud.showError(e.message));
+
+/**
+ * Modo práctica: el reparto que daría la línea que se está dibujando, sin
+ * cortar nada. Se recalcula a 10 Hz con el mismo idioma de acumulador que usa
+ * la física, porque recorrer las 1089 celdas en cada frame no hace falta para
+ * un número que el ojo lee cinco veces por segundo.
+ */
+let practiceAcc = 0;
+const practicePlane = { px: 0, py: 0, pz: 0, nx: 0, ny: 0, nz: 0 };
+const practicePair = [0, 0];
+
+function updatePractice(dt) {
+  if (!hud.practiceOn()) return;
+  practiceAcc += dt;
+  if (practiceAcc < 0.1) return;
+  practiceAcc = 0;
+
+  const a = mech.aim ? mech.aim() : null;
+  if (!a) { hud.setPracticeSplit(null); return; }
+
+  let dx = a.bx - a.ax, dz = a.bz - a.az;
+  const len = Math.hypot(dx, dz);
+  if (!(len > 1e-4)) { hud.setPracticeSplit(null); return; }
+  dx /= len; dz /= len;
+
+  practicePlane.px = a.ax; practicePlane.py = a.y; practicePlane.pz = a.az;
+  practicePlane.nx = -dz;  practicePlane.ny = 0;   practicePlane.nz = dx;
+
+  const [p, q] = volume.splitByPlane(
+    practicePlane.px, practicePlane.py, practicePlane.pz,
+    practicePlane.nx, practicePlane.ny, practicePlane.nz);
+  const t = p + q;
+  practicePair[0] = (100 * p) / t;
+  practicePair[1] = (100 * q) / t;
+  hud.setPracticeSplit(practicePair);
+}
 
 // se reusa: el loop no debe asignar nada por frame
 const io = { poses: null, pointers: null, source: 'none', rawDt: DT, replayDt: 0 };
@@ -232,6 +321,9 @@ function frame(now) {
   if (DEV && devState.juiceVisible !== null) juice.points.visible = devState.juiceVisible;
   jelly.update(topo);
   jelly.material.uniforms.uTime.value = now * 0.001;
+
+  updatePractice(dt);
+  labels.update(now);
 
   view.render();
   hud.setFps(Math.round(fpsEma));

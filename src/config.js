@@ -56,9 +56,11 @@ export const GRADES = [
 
 /** Modo práctica: muestra el reparto proyectado mientras se apunta. */
 export const PRACTICE_DEFAULT = false;
-/** Ponderar pulpa y cáscara con densidades distintas. Por ahora, solo volumen. */
-export const DENSITY_WEIGHTING = false;
-/** Cuánto puede desviarse la suma de los hijos del volumen del padre. */
+/**
+ * Cuánto pueden discrepar las dos formas de medir el volumen de una pieza antes
+ * de avisar: el reparto contra el plano y la suma de celdas por esquinas. Son
+ * caminos independientes, así que si no coinciden hay un error de geometría.
+ */
 export const VOLUME_TOLERANCE = 0.01;
 
 /* MediaPipe se carga del CDN en runtime: su WASM y su modelo de 7.8 MB se bajan

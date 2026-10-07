@@ -18,8 +18,9 @@ export const DEV = new URLSearchParams(location.search).has('dev');
 export const devState = { paused: false, juiceVisible: null };
 
 export function installDevtools({
-  lat, topo, jelly, juice, replay,
-  getBlades, getMechanic, getMechanicState, getPieces, getPhysMs, getCuts,
+  lat, topo, jelly, juice, replay, pieces,
+  getBlades, getMechanic, getMechanicState, getPieces, getPhysMs, getCuts, getScore,
+  cutLine, splitAt,
 }) {
   if (!DEV) return;
 
@@ -130,19 +131,22 @@ export function installDevtools({
         El contador de pedazos ignora las de menos de 10 partículas; esto muestra
         todo, que es lo que hace falta cuando un corte se ve y no separa. */
     get components() {
-      const { N, M, sprA, sprB, sprAlive } = lat;
-      const par = new Int32Array(N);
-      for (let i = 0; i < N; i++) par[i] = i;
-      const find = (x) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
-      for (let m = 0; m < M; m++) {
-        if (!sprAlive[m]) continue;
-        const a = find(sprA[m]), b = find(sprB[m]);
-        if (a !== b) par[a] = b;
-      }
-      const size = new Int32Array(N);
-      for (let i = 0; i < N; i++) size[find(i)]++;
-      return Array.from(size).filter((n) => n > 0).sort((a, b) => b - a);
+      const out = [];
+      for (let L = 0; L < pieces.nLabels; L++) out.push(pieces.sizeOf(L));
+      return out.sort((a, b) => b - a);
     },
+    /** Ids estables de las piezas vivas, para seguir quién salió de quién. */
+    get pieceIds() {
+      const out = [];
+      for (let L = 0; L < pieces.nLabels; L++) out.push(pieces.idOfLabel(L));
+      return out;
+    },
+    /** Puntaje: estadísticas de la sesión y el último corte medido. */
+    get score() { return getScore(); },
+    /** Corta por una línea de mundo, sin gesto. La mecánica que no sepa, ignora. */
+    cutLine,
+    /** Reparto que daría una línea **ahora mismo**, sin cortar. */
+    splitAt,
     get juiceCount() { return juice.count; },
     get physMs() { return +getPhysMs().toFixed(2); },
     get visibleFaces() { return topo.visCount; },

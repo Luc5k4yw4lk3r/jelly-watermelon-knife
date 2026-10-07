@@ -47,6 +47,9 @@ export function createLineKnife({ view, lat, shape, cutter, onCut, getPieces }) 
     dirx: 1, diry: 0, vx: 0, vy: 0,
   };
 
+  /* El plano del corte, para que `onCut` pueda medir el reparto. Se reusa. */
+  const cutPlane = { px: 0, py: 0, pz: 0, nx: 0, ny: 0, nz: 0 };
+
   const _g = new THREE.Vector3();
   const A = { x: 0, z: 0 }, B = { x: 0, z: 0 };
   const input = {
@@ -149,7 +152,9 @@ export function createLineKnife({ view, lat, shape, cutter, onCut, getPieces }) 
     lastCut.bx = B.x; lastCut.bz = B.z;
     lastCut.len = len; lastCut.severed = cut.severed;
 
-    onCut(cut, cutBlade, cleaver);
+    cutPlane.px = cutBasis.tx; cutPlane.py = cutBasis.ty; cutPlane.pz = cutBasis.tz;
+    cutPlane.nx = cutBasis.fx; cutPlane.ny = cutBasis.fy; cutPlane.nz = cutBasis.fz;
+    onCut(cut, cutBlade, cleaver, cutPlane);
 
     /* Después de `onCut`, que es quien reconstruye las componentes: antes,
        `compOf` todavía tendría los slots de antes del corte. */
@@ -257,10 +262,39 @@ export function createLineKnife({ view, lat, shape, cutter, onCut, getPieces }) 
     view.setShadowExtent(2.6);
   }
 
+  /**
+   * Línea que se está apuntando, o null. La usa el modo práctica para mostrar
+   * el reparto proyectado sin tener que cortar.
+   */
+  function aim() {
+    if (fsm.state !== AIMING) return null;
+    _aim.ax = A.x; _aim.az = A.z;
+    _aim.bx = B.x; _aim.bz = B.z;
+    _aim.y = view.target.y;
+    return _aim;
+  }
+  const _aim = { ax: 0, az: 0, bx: 0, bz: 0, y: 0 };
+
+  /**
+   * Corta por una línea dada en coordenadas de mundo, sin gesto y sin animación.
+   *
+   * Es para `?dev` y para los tests: dibujar un trazo con el puntero se lleva
+   * decenas de frames, y a 10 fps eso son segundos por corte. Lo que el gesto
+   * prueba —que el puntero se traduce bien a una línea— lo cubre un test; todo
+   * lo demás se puede probar con la línea puesta a mano, exacta y al instante.
+   */
+  function devCut(ax, az, bx, bz) {
+    A.x = ax; A.z = az;
+    B.x = bx; B.z = bz;
+    doCut();
+  }
+
   return {
     enter,
     exit,
     update,
+    aim,
+    devCut,
     get blades() { return NO_BLADES; },   // la cuchilla corta, no empuja
     devState: () => ({
       state: lastState, ax: A.x, az: A.z, bx: B.x, bz: B.z, lastCut,

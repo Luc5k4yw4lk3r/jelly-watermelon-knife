@@ -135,6 +135,25 @@ test('la suma de las piezas es el total, aunque el corte mate celdas', () => {
   expect(sum).toBeCloseTo(ctx.vm.total, 9);
 });
 
+test('aplastar un lado no cambia el reparto medido', () => {
+  /* **Esta es la prueba de que medir en reposo sirve.** Se aplasta la mitad de
+     x > 0 contra el piso sin mover nada a través del plano: la cantidad de
+     material a cada lado es exactamente la misma, y la medición tiene que decir
+     lo mismo. Midiendo sobre la malla deformada, la mitad aplastada ocuparía
+     menos volumen y el mismo corte puntuaría distinto según en qué momento del
+     bamboleo se lo mire. */
+  const ctx = melon();
+  const [a0, b0] = ctx.vm.splitByPlane(0, 0, 0, 1, 0, 0);
+  expect(a0).toBeCloseTo(b0, 6);
+
+  const { N, pos } = ctx.lat;
+  for (let p = 0; p < N; p++) if (pos[p * 3] > 0) pos[p * 3 + 1] *= 0.6;
+
+  const [a1, b1] = ctx.vm.splitByPlane(0, 0, 0, 1, 0, 0);
+  expect(a1).toBeCloseTo(a0, 9);
+  expect(b1).toBeCloseTo(b0, 9);
+});
+
 test('un tajo por el centro reparte mitad y mitad', () => {
   const ctx = melon();
   const { basis } = chop(ctx, { x: 0, z: -1.6 }, { x: 0, z: 1.6 });
