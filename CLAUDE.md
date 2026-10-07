@@ -263,6 +263,13 @@ así que un trazo que apenas cubre la fruta deja de cubrirla en cuanto los pedaz
 mueven: la sandía queda entera con una muesca, que es correcto y hace el test
 inestable.
 
+**Para una aserción exacta, cortá la sandía en reposo.** La forma de reposo es
+simétrica, así que un corte por el centro reparte 50/50 hasta el último decimal en
+cualquier máquina. Una sandía *asentada* no: queda ligeramente ladeada, y cuánto
+depende de cuánto tiempo simulado pasó en el arranque. Congelar y después reiniciar
+(`pristine()` en los tests) deja las partículas en reposo exacto, y recién ahí las
+aserciones pueden ser exactas en vez de tolerantes.
+
 **Si un test hace dos cosas con física en el medio, congelá** (`__dev.pause()`): la
 cuchilla igual se anima y corta, pero los pedazos dejan de moverse. Sin eso, cuánto
 se movieron entre una acción y la otra depende de cuántos frames cayeron, o sea de la

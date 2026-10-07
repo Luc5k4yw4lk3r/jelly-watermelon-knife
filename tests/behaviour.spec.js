@@ -392,6 +392,26 @@ const mechanic = (page) => page.evaluate(() => window.__dev.mechanic);
  * porque la mecánica se actualiza antes del congelado.
  */
 const freeze = (page) => page.evaluate(() => window.__dev.pause());
+
+/**
+ * Sandía nueva y **quieta**, en su forma de reposo exacta.
+ *
+ * La forma de reposo es simétrica, así que un corte por el centro reparte 50/50
+ * hasta el último decimal, en cualquier máquina. Una sandía *asentada* no: cae,
+ * rebota y queda ligeramente ladeada —está anotado en el backlog—, y cuánto se
+ * ladeó depende de cuánto tiempo simulado pasó durante la espera de `boot`, que
+ * se mide en segundos de reloj y por lo tanto en frames. Ahí un «corte por el
+ * centro» puntúa 100 en una máquina y 99 en otra.
+ *
+ * Primero congela y después reinicia: sin pasos de física de por medio, las
+ * partículas se quedan exactamente donde las pone `lat.reset()`.
+ */
+async function pristine(page) {
+  await freeze(page);
+  await page.locator('#btnReset').click();
+  // esperar la condición, no un reloj: el reinicio se procesa en un frame
+  await page.waitForFunction(() => window.__dev.pieces === 1, null, { timeout: 30_000 });
+}
 const lastCut = (page) => page.evaluate(() => window.__dev.mechanicState.lastCut);
 
 test('arranca en la mecánica por defecto, y ?mech elige otra', async ({ page }) => {
@@ -510,15 +530,15 @@ test('un corte con el gesto puntúa, y el puntaje describe el reparto', async ({
 test('por el centro da mitad y mitad; por el borde, claramente desparejo', async ({ page }) => {
   const errs = problems(page);
   await bootMech(page, 'lineKnife');
+  await pristine(page);
 
   await cutLine(page, 0, -1.6, 0, 1.6);
   const centro = (await score(page)).last;
-  expect(centro.split[0]).toBeCloseTo(50, 0);
-  expect(centro.precision).toBeGreaterThan(99);
+  expect(centro.split[0]).toBeCloseTo(50, 3);
+  expect(centro.precision).toBe(100);
   expect(centro.grade).toBe('Perfecto');
 
-  await page.locator('#btnReset').click();
-  await page.waitForTimeout(400);
+  await pristine(page);
 
   await cutLine(page, 0.45, -1.6, 0.45, 1.6);
   const borde = (await score(page)).last;
@@ -562,15 +582,10 @@ test('el puntaje de un corte no cambia después', async ({ page }) => {
 test('recortar una mitad se puntúa contra esa mitad', async ({ page }) => {
   const errs = problems(page);
   await bootMech(page, 'lineKnife');
+  await pristine(page);
 
   await cutLine(page, 0, -1.6, 0, 1.6);              // en dos mitades
   const entera = (await score(page)).last;
-
-  /* Congelar antes del segundo corte. Las mitades se abren y se caen, y el plano
-     del segundo tajo está fijo en el mundo: cuanto más se movieron, menos pasa
-     por el centro de cada una. Cuánto se mueven depende de cuántos frames
-     cayeron entre un corte y el otro, o sea de la máquina. */
-  await freeze(page);
 
   /* Una línea perpendicular, también de borde a borde: parte **las dos** mitades
      por su propio centro. Una línea acotada a una sola mitad sería más directa,
@@ -598,12 +613,12 @@ test('recortar una mitad se puntúa contra esa mitad', async ({ page }) => {
 
 test('las estadísticas acumulan y el botón las reinicia', async ({ page }) => {
   await bootMech(page, 'lineKnife');
+  await pristine(page);
 
   await cutLine(page, 0, -1.6, 0, 1.6);              // perfecto
   const perfecto = (await score(page)).stats.last;
-  expect(perfecto).toBeGreaterThan(99);
+  expect(perfecto).toBe(100);
 
-  await freeze(page);                                // que no se muevan entre corte y corte
   await cutLine(page, -1.6, 0.55, 1.6, 0.55);        // torcido, sobre las dos mitades
 
   let st = (await score(page)).stats;
@@ -621,6 +636,7 @@ test('las estadísticas acumulan y el botón las reinicia', async ({ page }) => 
 
 test('un golpe que parte dos piezas puntúa las dos', async ({ page }) => {
   await bootMech(page, 'lineKnife');
+  await pristine(page);
   await cutLine(page, 0, -1.6, 0, 1.6);              // dos mitades
   const antes = (await score(page)).stats.count;
 

@@ -471,9 +471,21 @@ y la siguiente depende de cuántos frames cayeron, y eso depende de la máquina.
   corrido: el reparto daba 51.5 en vez de 50.
 
 Las dos primeras se arreglan con geometría que no sea marginal —líneas de borde a
-borde, que además prueban más—. La tercera no: hay que **congelar** (`__dev.pause()`)
-entre las dos acciones. La cuchilla se sigue animando y cortando, pero los pedazos
-dejan de moverse y el test mide lo que quería medir.
+borde, que además prueban más—. La tercera pide **congelar** (`__dev.pause()`) entre
+las dos acciones: la cuchilla se sigue animando y cortando, pero los pedazos dejan de
+moverse.
+
+Y hay una cuarta, que es la de fondo: **la sandía asentada tampoco es la misma en
+todas las máquinas**. Cae, rebota y queda ligeramente ladeada, y cuánto se ladeó
+depende de cuánto tiempo simulado pasó durante la espera de arranque —que se mide en
+segundos de reloj, o sea en frames—. Un «corte por el centro» puntuaba 100 acá y 99
+en CI.
+
+La forma de **reposo**, en cambio, es exactamente simétrica: un corte por el centro
+reparte 50/50 hasta el último decimal, en cualquier lado. Congelar y después
+reiniciar deja las partículas justo ahí, y entonces las aserciones pueden ser exactas
+en vez de tolerantes. Una aserción exacta que pasa en una máquina pasa en todas; una
+tolerante solo dice que todavía no se fue de rango.
 
 ### Esperar una condición, no un tiempo
 
