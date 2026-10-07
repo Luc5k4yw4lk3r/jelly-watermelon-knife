@@ -17,6 +17,7 @@ import { createHandTracking } from './input/handTracking.js';
 
 import { sfx } from './audio/squish.js';
 import { createHud } from './ui/hud.js';
+import { createTuner } from './ui/tuner.js';
 
 /* ── simulación ──────────────────────────────────────────────────────────── */
 
@@ -66,6 +67,8 @@ const hud = createHud({
   onUseCamera: () => { sfx.init(); return useCamera(); },
   onUseMouse: () => { sfx.init(); useMouse(); },
 });
+
+createTuner({ onStiffnessChange: lat.refreshStiffness });
 
 function reset() {
   lat.reset();
