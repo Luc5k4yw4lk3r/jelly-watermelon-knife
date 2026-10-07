@@ -8,8 +8,15 @@ import { tune } from '../config.js';
  * devuelve qué pasó. Reconstruir la topología, lanzar el jugo, sonar el squish y
  * actualizar el HUD son decisiones de main.js, no de acá.
  */
-export function createCutter(lat) {
+export function createCutter(lat, basis) {
   const { N, M, pos, sprA, sprB, sprAlive, maxSprLen } = lat;
+
+  /* Las partículas se proyectan al plano de corte (derecha/arriba de la cámara)
+     y a su profundidad. Trabajar en esta base, y no en XY del mundo, es lo que
+     permite orbitar sin que el corte deje de coincidir con lo que se ve. */
+  const pa = new Float32Array(N);   // sobre el eje "derecha"
+  const pb = new Float32Array(N);   // sobre el eje "arriba"
+  const pd = new Float32Array(N);   // hacia la cámara
 
   const quad = new Float64Array(8); // baseAnterior, puntaAnterior, puntaActual, baseActual
   const inBox = new Uint8Array(N);
@@ -82,11 +89,18 @@ export function createCutter(lat) {
     const pad = maxSprLen + 0.001;
     minx -= pad; maxx += pad; miny -= pad; maxy += pad;
 
-    // broadphase: un resorte solo puede alcanzar el área barrida si alguno de
-    // sus extremos cae en el bbox del quad expandido por el resorte más largo
+    // proyección a la base de cámara + broadphase: un resorte solo puede
+    // alcanzar el área barrida si alguno de sus extremos cae en el bbox del quad
+    // expandido por el resorte más largo
+    const { rx, ry, rz, ux, uy, uz, fx, fy, fz, tx, ty, tz } = basis;
     for (let p = 0; p < N; p++) {
-      const o = p * 3, x = pos[o], y = pos[o + 1];
-      inBox[p] = (x >= minx && x <= maxx && y >= miny && y <= maxy) ? 1 : 0;
+      const o = p * 3;
+      const dx = pos[o] - tx, dy = pos[o + 1] - ty, dz = pos[o + 2] - tz;
+      const a = dx * rx + dy * ry + dz * rz;
+      const b = dx * ux + dy * uy + dz * uz;
+      pa[p] = a; pb[p] = b;
+      pd[p] = -(dx * fx + dy * fy + dz * fz);
+      inBox[p] = (a >= minx && a <= maxx && b >= miny && b <= maxy) ? 1 : 0;
     }
 
     let severed = 0, spawns = 0;
@@ -94,18 +108,18 @@ export function createCutter(lat) {
       if (!sprAlive[m]) continue;
       const a = sprA[m], b = sprB[m];
       if (!inBox[a] && !inBox[b]) continue;
-      const oa = a * 3, ob = b * 3;
-      if (!segCrossesQuad(pos[oa], pos[oa + 1], pos[ob], pos[ob + 1])) continue;
+      if (!segCrossesQuad(pa[a], pb[a], pa[b], pb[b])) continue;
       sprAlive[m] = 0;
       severed++;
       // solo salpica desde el lado del corte que mira a la cámara: las gotas que
       // nacen dentro de la sandía quedan simplemente escondidas detrás
-      const mz = (pos[oa + 2] + pos[ob + 2]) * 0.5;
-      if (spawns < 14 && mz > 0.25 && (severed % 7) === 0) {
-        const s = spawns * 3;
-        spawnPoints[s]     = (pos[oa] + pos[ob]) * 0.5;
-        spawnPoints[s + 1] = (pos[oa + 1] + pos[ob + 1]) * 0.5;
-        spawnPoints[s + 2] = mz + 0.12;
+      const depth = (pd[a] + pd[b]) * 0.5;
+      if (spawns < 14 && depth > 0.25 && (severed % 7) === 0) {
+        const oa = a * 3, ob = b * 3, s = spawns * 3;
+        // el punto medio, corrido 0.12 hacia la cámara para que no nazca tapado
+        spawnPoints[s]     = (pos[oa] + pos[ob]) * 0.5 - fx * 0.12;
+        spawnPoints[s + 1] = (pos[oa + 1] + pos[ob + 1]) * 0.5 - fy * 0.12;
+        spawnPoints[s + 2] = (pos[oa + 2] + pos[ob + 2]) * 0.5 - fz * 0.12;
         spawns++;
       }
     }

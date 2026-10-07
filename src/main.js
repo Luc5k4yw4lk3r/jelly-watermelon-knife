@@ -14,25 +14,33 @@ import { createJuice } from './render/juice.js';
 import { createBlade } from './input/blade.js';
 import { createMouse } from './input/mouse.js';
 import { createHandTracking } from './input/handTracking.js';
+import { createOrbit } from './input/orbit.js';
 
 import { sfx } from './audio/squish.js';
 import { createHud } from './ui/hud.js';
 import { createTuner } from './ui/tuner.js';
+
+/* ── render ──────────────────────────────────────────────────────────────── */
+
+/* La escena va primero: el corte y la colisión trabajan en la base de la cámara
+   (derecha / arriba / profundidad), que es lo que permite orbitar sin que el
+   plano de corte deje de coincidir con lo que se ve. */
+const canvas = document.getElementById('gl');
+const view = createScene(canvas);
 
 /* ── simulación ──────────────────────────────────────────────────────────── */
 
 const lat = createLattice();
 const topo = createTopology(lat);
 const shape = createShapeMatcher(lat);
-const solver = createSolver(lat, shape);
-const cutter = createCutter(lat);
+const solver = createSolver(lat, shape, view.basis);
+const cutter = createCutter(lat, view.basis);
 
-/* ── render ──────────────────────────────────────────────────────────────── */
+/* ── objetos de escena ───────────────────────────────────────────────────── */
 
-const view = createScene(document.getElementById('gl'));
 const jelly = createJellyMesh(lat, view.scene);
-const knife = createKnife(view.scene, view.camera, view.knifeParallax);
-const juice = createJuice(view.scene);
+const knife = createKnife(view.scene, view.camera, view);
+const juice = createJuice(view.scene, view.basis);
 
 view.onResize.push(juice.setPixelScale);
 
@@ -40,6 +48,7 @@ view.onResize.push(juice.setPixelScale);
 
 const { blade, update: updateBlade, shouldCut } = createBlade();
 const mouse = createMouse();
+const orbit = createOrbit(canvas, view.orbit);
 const hand = createHandTracking({
   onStatus: ({ source, tracking }) => {
     if (source === 'hand') hud.setSource('Mano', true);
@@ -98,6 +107,7 @@ function frame(now) {
   fpsEma += (1 / dt - fpsEma) * 0.08;
 
   if (view.adaptResolution(fpsEma)) fpsEma = 60;
+  orbit.update(dt);
 
   const pose = source === 'hand'
     ? hand.getPose(view.ndcToPlane)

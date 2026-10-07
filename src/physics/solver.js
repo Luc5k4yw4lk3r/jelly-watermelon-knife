@@ -7,7 +7,7 @@ import { FLOOR_Y, MAX_STEP_DISP, tune } from '../config.js';
  * relajación la rigidez no se propaga a través de las 10 capas de la lattice y
  * la sandía se despanzurra bajo su propio peso. Ver physics/shapeMatching.js.
  */
-export function createSolver(lat, shape) {
+export function createSolver(lat, shape, basis) {
   const { N, M, pos, prev, sprA, sprB, sprRest, sprK, sprAlive } = lat;
 
   function step(dt, blade) {
@@ -72,16 +72,19 @@ export function createSolver(lat, shape) {
     const R2 = R * R;
     const pushClamp = tune.PUSH_CLAMP;
     const friction = 1 - tune.FLOOR_FRICTION;
+    const { rx, ry, rz, ux, uy, uz, tx, ty, tz } = basis;
     const bounce = tune.FLOOR_BOUNCE;
 
     for (let p = 0; p < N; p++) {
       const o = p * 3;
 
       if (useBlade) {
-        // punto más cercano sobre el segmento de la hoja, en el plano XY: el
-        // cuchillo es un prisma que atraviesa toda la profundidad, así que se
-        // ignora Z a propósito
-        const px = pos[o] - ax, py = pos[o + 1] - ay;
+        // punto más cercano sobre el segmento de la hoja, proyectado al plano de
+        // corte: el cuchillo es un prisma que atraviesa toda la profundidad, así
+        // que el eje hacia la cámara se ignora a propósito
+        const wx = pos[o] - tx, wy = pos[o + 1] - ty, wz = pos[o + 2] - tz;
+        const px = (wx * rx + wy * ry + wz * rz) - ax;
+        const py = (wx * ux + wy * uy + wz * uz) - ay;
         let t = (px * ex + py * ey) / eLen2;
         t = t < 0 ? 0 : (t > 1 ? 1 : t);
         const dx = px - ex * t, dy = py - ey * t;
@@ -90,8 +93,11 @@ export function createSolver(lat, shape) {
           const d = Math.sqrt(d2) || 1e-6;
           let push = R - d;
           if (push > pushClamp) push = pushClamp;
-          pos[o]     += dx / d * push;
-          pos[o + 1] += dy / d * push;
+          // el empuje vuelve al mundo sobre los ejes derecha/arriba de la cámara
+          const sx = dx / d * push, sy = dy / d * push;
+          pos[o]     += sx * rx + sy * ux;
+          pos[o + 1] += sx * ry + sy * uy;
+          pos[o + 2] += sx * rz + sy * uz;
         }
       }
 

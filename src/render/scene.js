@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FLOOR_Y, PLANE_Z, BLADE_Z } from '../config.js';
+import { FLOOR_Y, BLADE_Z } from '../config.js';
 
 export const KEY_DIR = new THREE.Vector3(3.2, 5.6, 3.4).normalize();
 export const FILL_DIR = new THREE.Vector3(-0.55, 0.3, -0.5).normalize();
@@ -48,8 +48,53 @@ export function createScene(canvas) {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 60);
-  camera.position.set(0, 0.34, 4.45);
-  camera.lookAt(0, -0.12, 0);
+
+  /* Órbita alrededor del centro de la escena. El corte vive en el plano que pasa
+     por TARGET con la normal mirando a la cámara, así que al orbitar el plano
+     acompaña y siempre coincide con lo que se ve. */
+  const TARGET = new THREE.Vector3(0, -0.12, 0);
+  const ORBIT_RADIUS = 4.474;
+  let azimuth = 0, polar = 1.468;        // radianes; polar desde +Y
+  const POLAR_MIN = 0.35, POLAR_MAX = 1.92;
+
+  function placeCamera() {
+    const sp = Math.sin(polar), cp = Math.cos(polar);
+    camera.position.set(
+      TARGET.x + ORBIT_RADIUS * sp * Math.sin(azimuth),
+      TARGET.y + ORBIT_RADIUS * cp,
+      TARGET.z + ORBIT_RADIUS * sp * Math.cos(azimuth),
+    );
+    camera.lookAt(TARGET);
+    camera.updateMatrixWorld();
+    updateBasis();
+  }
+
+  /* Base de cámara en números planos: la usan los bucles calientes del corte y
+     de la colisión, que proyectan cada partícula a coordenadas de pantalla. */
+  const basis = {
+    rx: 1, ry: 0, rz: 0,      // derecha
+    ux: 0, uy: 1, uz: 0,      // arriba
+    fx: 0, fy: 0, fz: -1,     // hacia adentro de la escena
+    tx: TARGET.x, ty: TARGET.y, tz: TARGET.z,
+  };
+  const _right = new THREE.Vector3(), _up = new THREE.Vector3(), _fwd = new THREE.Vector3();
+
+  function updateBasis() {
+    _right.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+    _up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+    _fwd.setFromMatrixColumn(camera.matrixWorld, 2).normalize().negate();
+    basis.rx = _right.x; basis.ry = _right.y; basis.rz = _right.z;
+    basis.ux = _up.x;    basis.uy = _up.y;    basis.uz = _up.z;
+    basis.fx = _fwd.x;   basis.fy = _fwd.y;   basis.fz = _fwd.z;
+  }
+
+  placeCamera();
+
+  function orbit(dAzimuth, dPolar) {
+    azimuth += dAzimuth;
+    polar = Math.min(POLAR_MAX, Math.max(POLAR_MIN, polar + dPolar));
+    placeCamera();
+  }
 
   /* luces: la direccional alimenta el shadow map; el shader de la gelatina hace
      su propio sombreado con direcciones equivalentes (más barato y con más
@@ -78,10 +123,10 @@ export function createScene(canvas) {
   floor.receiveShadow = true;
   scene.add(floor);
 
-  /* El cuchillo se dibuja a BLADE_Z pero el corte ocurre en PLANE_Z, así que su
+  /* El cuchillo se dibuja BLADE_Z más cerca que el plano de corte, así que su
      posición se escala respecto de la cámara para que ambos coincidan en
-     pantalla hasta el píxel. */
-  const knifeParallax = (camera.position.z - BLADE_Z) / (camera.position.z - PLANE_Z);
+     pantalla hasta el píxel. El radio de órbita es fijo, así que es constante. */
+  const knifeParallax = (ORBIT_RADIUS - BLADE_Z) / ORBIT_RADIUS;
 
   const onResize = [];
   function resize() {
@@ -108,12 +153,30 @@ export function createScene(canvas) {
   }
 
   const _v = new THREE.Vector3();
-  /** NDC → punto del plano de corte, en coordenadas de mundo. */
+  /**
+   * NDC → coordenadas **del plano de corte** (derecha, arriba de la cámara).
+   *
+   * Todo el corte y la colisión trabajan en estas dos coordenadas, no en XY del
+   * mundo: así la órbita no rompe nada.
+   */
   function ndcToPlane(nx, ny, out) {
     _v.set(nx, ny, 0.5).unproject(camera).sub(camera.position);
-    const t = (PLANE_Z - camera.position.z) / _v.z;
-    out.x = camera.position.x + _v.x * t;
-    out.y = camera.position.y + _v.y * t;
+    const cx = camera.position.x - basis.tx;
+    const cy = camera.position.y - basis.ty;
+    const cz = camera.position.z - basis.tz;
+    const denom = _v.x * basis.fx + _v.y * basis.fy + _v.z * basis.fz;
+    const t = -(cx * basis.fx + cy * basis.fy + cz * basis.fz) / (denom || 1e-6);
+    const px = cx + _v.x * t, py = cy + _v.y * t, pz = cz + _v.z * t;
+    out.x = px * basis.rx + py * basis.ry + pz * basis.rz;
+    out.y = px * basis.ux + py * basis.uy + pz * basis.uz;
+    return out;
+  }
+
+  /** Coordenadas del plano → punto de mundo, a `depth` unidades hacia la cámara. */
+  function planeToWorld(a, b, depth, out) {
+    out.x = basis.tx + basis.rx * a + basis.ux * b - basis.fx * depth;
+    out.y = basis.ty + basis.ry * a + basis.uy * b - basis.fy * depth;
+    out.z = basis.tz + basis.rz * a + basis.uz * b - basis.fz * depth;
     return out;
   }
 
@@ -122,7 +185,7 @@ export function createScene(canvas) {
   }
 
   return {
-    renderer, scene, camera, knifeParallax,
-    resize, onResize, adaptResolution, ndcToPlane, render,
+    renderer, scene, camera, knifeParallax, basis, orbit,
+    resize, onResize, adaptResolution, ndcToPlane, planeToWorld, render,
   };
 }
