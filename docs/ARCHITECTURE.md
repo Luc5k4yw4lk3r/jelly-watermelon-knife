@@ -458,6 +458,15 @@ plano: la cantidad de material a cada lado no cambió, así que la medición no 
 cambiar. Eso se hace en Node, donde las posiciones se escriben a mano, y el sabotaje
 lo pone en rojo.
 
+### Un test que apunta al hueco entre dos pedazos apunta a un blanco móvil
+
+Para probar que el puntaje es relativo al pedazo que se corta, lo directo es cortar
+**uno solo**. Pero el extremo de esa línea cae en el hueco entre los dos, y el ancho
+del hueco depende de cuánto se separaron, o sea de cuántos frames cayeron. Pasaba en
+una máquina y fallaba en CI, que corre más rápido.
+
+Una línea de borde a borde no tiene nada marginal, y de paso prueba más.
+
 ### Esperar una condición, no un tiempo
 
 `lineDrag()` esperaba 1600 ms después de soltar, para que la cuchilla bajara y

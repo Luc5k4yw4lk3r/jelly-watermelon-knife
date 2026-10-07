@@ -41,7 +41,7 @@ Mide qué tan parejo quedó un corte y lo muestra. No cambia cómo se corta.
 | **AV3** | Aplastar **un solo lado**, sin mover material a través del plano, no cambia el reparto. | `[N]` «aplastar un lado no cambia el reparto medido» | V2 |
 | **AV4** | La suma de los dos lados es el total, para cualquier plano. | `[N]` «el reparto conserva el volumen, siempre» | V3 |
 | **AV5** | La suma de todas las piezas es el total aunque el corte mate celdas. | `[N]` «la suma de las piezas es el total…» | V3 |
-| **AV6** | Recortar una mitad por su propio centro puntúa ~50/50, no 25/75. | `[N]` «recortar una mitad se mide contra esa mitad» · `[B]` «recortar una mitad se puntúa contra esa mitad» | V4 |
+| **AV6** | Recortar una mitad por su propio centro puntúa ~50/50 y mide la mitad del volumen total, no 25/75. | `[N]` «recortar una mitad se mide contra esa mitad» · `[B]` «recortar una mitad se puntúa contra esa mitad» | V4 |
 | **AV7** | Precisión y ratio contra números conocidos; escala invariante. | `[N]` «la precisión mide cuánto se desvió del medio» | V5 |
 | **AV8** | Los rangos caen justo en su umbral. | `[N]` «los rangos caen justo en el umbral» | V6 |
 | **AV9** | Un golpe que parte dos piezas registra dos y devuelve el promedio. | `[N]` «un golpe que parte varias piezas…» · `[B]` «un golpe que parte dos piezas puntúa las dos» | V7 |
@@ -150,7 +150,19 @@ padre se calcula por dos caminos independientes —el reparto contra el plano y 
 de celdas repartidas por esquinas— y si discrepan más que la tolerancia, se avisa por
 consola bajo `?dev`.
 
-### 4.8 Los tests cortan sin gesto
+### 4.8 Una línea acotada a una sola pieza es un test frágil
+
+Para comprobar que el puntaje es relativo al padre, lo directo es cortar **una** de
+las mitades. Pero el extremo de esa línea cae en el hueco entre las dos, y qué tan
+ancho es ese hueco depende de cuánto alcanzaron a separarse: o sea, de cuántos frames
+cayó la máquina. Pasaba acá y fallaba en CI, que corre más rápido.
+
+La versión que no tiene nada marginal es una línea **de borde a borde**, que parte las
+dos mitades a la vez por su propio centro. Encima prueba más: cada una tiene que dar
+50/50 *y* medir la mitad del volumen que midió el corte de la sandía entera. Si el
+puntaje fuera contra la fruta completa, darían 25/75.
+
+### 4.9 Los tests cortan sin gesto
 
 Dibujar un trazo se lleva decenas de frames y a 10 fps son segundos por corte; tres
 cortes en un test dejaban al navegador al borde de caerse. `__dev.cutLine(ax,az,bx,bz)`

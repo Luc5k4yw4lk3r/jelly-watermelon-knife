@@ -218,6 +218,7 @@ installDevtools({
   getScore: () => ({
     stats: scoreboard.stats(),
     last: scoreboard.history[scoreboard.history.length - 1] || null,
+    history: scoreboard.history,
   }),
 });
 

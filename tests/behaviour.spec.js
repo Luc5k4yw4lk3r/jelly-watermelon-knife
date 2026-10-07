@@ -564,17 +564,29 @@ test('recortar una mitad se puntúa contra esa mitad', async ({ page }) => {
   await bootMech(page, 'lineKnife');
 
   await cutLine(page, 0, -1.6, 0, 1.6);              // en dos mitades
-  /* La segunda línea arranca en x = 0.1 y no en −1.6: así su extensión cubre la
-     mitad derecha y nada más. Una línea de borde a borde cruzaría las dos y
-     puntuaría dos cortes, no uno. */
-  await cutLine(page, 0.1, 0, 1.6, 0);
+  const entera = (await score(page)).last;
 
-  const { last, stats } = await score(page);
-  expect(stats.count).toBe(2);
-  /* Si el puntaje fuera contra la sandía entera, partir una mitad por el medio
-     daría 25/75. Contra su propia mitad, da 50/50. */
-  expect(last.split[0]).toBeCloseTo(50, 0);
-  expect(last.precision).toBeGreaterThan(95);
+  /* Una línea perpendicular, también de borde a borde: parte **las dos** mitades
+     por su propio centro. Una línea acotada a una sola mitad sería más directa,
+     pero su extremo cae justo en el hueco entre las dos y qué tan ancho es ese
+     hueco depende de cuánto se separaron, o sea de la máquina. De borde a borde
+     no hay nada marginal. */
+  await cutLine(page, -1.6, 0, 1.6, 0);
+  const st = (await score(page)).stats;
+  expect(st.count).toBe(3);
+
+  const hijos = await page.evaluate(() => window.__dev.score.history.slice(-2));
+
+  for (const e of hijos) {
+    /* Si el puntaje fuera contra la sandía entera, partir una mitad por el medio
+       daría 25/75. Contra su propia mitad, da 50/50. */
+    expect(e.split[0]).toBeCloseTo(50, 0);
+    expect(e.precision).toBeGreaterThan(95);
+    // y cada una midió la mitad del volumen que midió el corte de la sandía entera
+    const suya = e.volumes[0] + e.volumes[1];
+    const todo = entera.volumes[0] + entera.volumes[1];
+    expect(suya / todo).toBeCloseTo(0.5, 1);
+  }
   expect(errs).toEqual([]);
 });
 
@@ -582,11 +594,15 @@ test('las estadísticas acumulan y el botón las reinicia', async ({ page }) => 
   await bootMech(page, 'lineKnife');
 
   await cutLine(page, 0, -1.6, 0, 1.6);              // perfecto
-  await cutLine(page, 0.1, 0.5, 1.6, 0.5);           // torcido, y solo sobre una mitad
+  const perfecto = (await score(page)).stats.last;
+  expect(perfecto).toBeGreaterThan(99);
+
+  await cutLine(page, -1.6, 0.55, 1.6, 0.55);        // torcido, sobre las dos mitades
 
   let st = (await score(page)).stats;
-  expect(st.count).toBe(2);
-  expect(st.best).toBeGreaterThan(st.last);          // el mejor no es el último
+  expect(st.count).toBe(3);
+  expect(st.best).toBe(perfecto);                    // el mejor no es el último
+  expect(st.last).toBeLessThan(perfecto);
   expect(st.avg).toBeLessThan(st.best);
   expect(await page.locator('#statLast').innerText()).not.toBe('—');
 
