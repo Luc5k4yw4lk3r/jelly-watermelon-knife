@@ -458,14 +458,22 @@ plano: la cantidad de material a cada lado no cambió, así que la medición no 
 cambiar. Eso se hace en Node, donde las posiciones se escriben a mano, y el sabotaje
 lo pone en rojo.
 
-### Un test que apunta al hueco entre dos pedazos apunta a un blanco móvil
+### Entre dos acciones de un test, la física sigue corriendo
 
-Para probar que el puntaje es relativo al pedazo que se corta, lo directo es cortar
-**uno solo**. Pero el extremo de esa línea cae en el hueco entre los dos, y el ancho
-del hueco depende de cuánto se separaron, o sea de cuántos frames cayeron. Pasaba en
-una máquina y fallaba en CI, que corre más rápido.
+Tres fallas distintas, el mismo origen: cuánto avanzó la simulación entre una acción
+y la siguiente depende de cuántos frames cayeron, y eso depende de la máquina.
 
-Una línea de borde a borde no tiene nada marginal, y de paso prueba más.
+- Un trazo que apenas cubría la fruta dejaba de cubrirla cuando los pedazos se
+  movían: la sandía quedaba entera con una muesca.
+- El extremo de una línea pensada para cortar **un solo** pedazo caía en el hueco
+  entre los dos, y el ancho del hueco es cuánto se separaron.
+- Un plano fijo en el mundo dejaba de pasar por el centro del pedazo, que se había
+  corrido: el reparto daba 51.5 en vez de 50.
+
+Las dos primeras se arreglan con geometría que no sea marginal —líneas de borde a
+borde, que además prueban más—. La tercera no: hay que **congelar** (`__dev.pause()`)
+entre las dos acciones. La cuchilla se sigue animando y cortando, pero los pedazos
+dejan de moverse y el test mide lo que quería medir.
 
 ### Esperar una condición, no un tiempo
 

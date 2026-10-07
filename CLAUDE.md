@@ -263,9 +263,13 @@ así que un trazo que apenas cubre la fruta deja de cubrirla en cuanto los pedaz
 mueven: la sandía queda entera con una muesca, que es correcto y hace el test
 inestable.
 
-**Para un segundo corte, congelá la física** (`__dev.pause()`): la cuchilla igual se
-anima y corta, pero los pedazos dejan de moverse y la geometría del segundo tajo es
-la misma en toda máquina.
+**Si un test hace dos cosas con física en el medio, congelá** (`__dev.pause()`): la
+cuchilla igual se anima y corta, pero los pedazos dejan de moverse. Sin eso, cuánto
+se movieron entre una acción y la otra depende de cuántos frames cayeron, o sea de la
+máquina — y eso se cuela en el resultado por tres caminos distintos, los tres vistos
+acá: un trazo que deja de cubrir la fruta, un extremo de línea que cae en el hueco
+entre dos pedazos, y un plano fijo que deja de pasar por el centro del pedazo que se
+movió.
 
 **La suite corre en serie** (`workers: 1`, `fullyParallel: false`). En paralelo,
 varias instancias WebGL por software se roban CPU, los fps colapsan y los barridos

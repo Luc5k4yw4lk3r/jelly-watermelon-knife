@@ -566,11 +566,17 @@ test('recortar una mitad se puntúa contra esa mitad', async ({ page }) => {
   await cutLine(page, 0, -1.6, 0, 1.6);              // en dos mitades
   const entera = (await score(page)).last;
 
+  /* Congelar antes del segundo corte. Las mitades se abren y se caen, y el plano
+     del segundo tajo está fijo en el mundo: cuanto más se movieron, menos pasa
+     por el centro de cada una. Cuánto se mueven depende de cuántos frames
+     cayeron entre un corte y el otro, o sea de la máquina. */
+  await freeze(page);
+
   /* Una línea perpendicular, también de borde a borde: parte **las dos** mitades
      por su propio centro. Una línea acotada a una sola mitad sería más directa,
      pero su extremo cae justo en el hueco entre las dos y qué tan ancho es ese
-     hueco depende de cuánto se separaron, o sea de la máquina. De borde a borde
-     no hay nada marginal. */
+     hueco depende otra vez de cuánto se separaron. De borde a borde no hay nada
+     marginal. */
   await cutLine(page, -1.6, 0, 1.6, 0);
   const st = (await score(page)).stats;
   expect(st.count).toBe(3);
@@ -597,6 +603,7 @@ test('las estadísticas acumulan y el botón las reinicia', async ({ page }) => 
   const perfecto = (await score(page)).stats.last;
   expect(perfecto).toBeGreaterThan(99);
 
+  await freeze(page);                                // que no se muevan entre corte y corte
   await cutLine(page, -1.6, 0.55, 1.6, 0.55);        // torcido, sobre las dos mitades
 
   let st = (await score(page)).stats;
