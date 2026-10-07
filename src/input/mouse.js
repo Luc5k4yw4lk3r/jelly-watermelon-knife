@@ -6,8 +6,8 @@
  * movimiento, el barrido sería un rectángulo tan ancho como larga la hoja y el
  * cuchillo excavaría la sandía en vez de rebanarla.
  */
-export function createMouse() {
-  const state = { nx: 0, ny: 0, seen: false, dirx: 0, diry: 1 };
+export function createMouse(canvas) {
+  const state = { nx: 0, ny: 0, seen: false, pressed: false, dirx: 0, diry: 1 };
 
   addEventListener('pointermove', (e) => {
     state.nx = (e.clientX / innerWidth) * 2 - 1;
@@ -15,6 +15,26 @@ export function createMouse() {
     state.seen = true;
   }, { passive: true });
   addEventListener('pointerleave', () => { state.seen = false; });
+
+  /* El "presionado" que consume la capa de puntero.
+     `pointerdown` va en el canvas y no en window, así que tocar un botón del HUD
+     no cuenta como apretar sobre la escena; el `pointerup` sí va en window, para
+     que soltar afuera igual suelte. La órbita se queda con el botón derecho, el
+     del medio y Shift+izquierdo (orbit.js), y acá se los deja pasar. */
+  let downId = -1;
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.shiftKey) return;
+    // un segundo dedo es el gesto de órbita, no un trazo: se suelta
+    if (downId !== -1) { downId = -1; state.pressed = false; return; }
+    downId = e.pointerId;
+    state.pressed = true;
+  });
+  const release = (e) => {
+    if (e.pointerId === downId || downId === -1) { downId = -1; state.pressed = false; }
+  };
+  addEventListener('pointerup', release);
+  addEventListener('pointercancel', release);
 
   const _p = { x: 0, y: 0 };
 

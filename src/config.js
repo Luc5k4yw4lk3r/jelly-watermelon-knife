@@ -31,6 +31,10 @@ export const PLANE_Z    = 0;                // plano donde vive el corte
 
 export const MAX_JUICE = 420;
 
+/* Mecánica con la que arranca el juego. `?mech=<id>` la pisa, y el selector del
+   HUD la cambia en caliente. Los ids están en `mechanics/registry.js`. */
+export const DEFAULT_MECHANIC = 'handKnife';
+
 /* MediaPipe se carga del CDN en runtime: su WASM y su modelo de 7.8 MB se bajan
    igual, así que empaquetar el wrapper no aportaría nada. */
 const MEDIAPIPE_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18';
@@ -67,6 +71,22 @@ export const tune = {
   CUT_SPEED: 4.0,           // u/s a partir de las cuales corta en vez de empujar
   MAX_KERF: 0.085,          // ranura lateral máxima que puede abrir un barrido
   MAX_CUT_ROT: 0.18,        // rad/frame; una hoja que gira pica en vez de cortar
+
+  // puntero de mano: pinza con histéresis, normalizada por el tamaño de la mano
+  PINCH_ON: 0.25,           // dist(pulgar,índice)/dist(muñeca,medio) para cerrar
+  PINCH_OFF: 0.40,          // y para abrir; la banda es lo que evita el parpadeo
+  EURO_MIN_CUTOFF: 1.6,
+  EURO_BETA: 0.9,
+
+  // mecánica "Cuchillo": dibujar una línea y tajar
+  HOVER_H: 0.95,            // altura de espera sobre el centro de la fruta
+  ALIGN_MS: 170,            // alinearse sobre AB
+  STRIKE_MS: 340,           // bajar; con ease-in, para que se sienta pesado
+  RETRACT_MS: 250,          // volver a subir
+  MIN_CUT_LEN: 0.35,        // línea más corta que esto no corta
+  CUT_MARGIN: 0.06,         // cuánto se extiende el corte más allá de A y de B
+  SEP_IMPULSE: 0.0015,      // empujón que abre las mitades (ver physics/impulse.js)
+  MAX_PIECES: 24,
 };
 
 /** Copia de los valores de fábrica, para que el panel pueda restaurarlos. */

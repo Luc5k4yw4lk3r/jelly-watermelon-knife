@@ -56,6 +56,20 @@
   .chip .dot.off{background:#b9c2b7;box-shadow:0 0 0 3px rgba(185,194,183,.2)}
   .chip b{font-variant-numeric:tabular-nums;font-weight:700}
   .muted{color:var(--ink-soft);font-weight:600}
+  .chip[hidden]{display:none}
+  /* un select nativo no hereda nada del chip: hay que desarmarlo a mano */
+  .chip select{
+    appearance:none;-webkit-appearance:none;
+    border:0;background:transparent;outline:none;
+    font:inherit;color:var(--ink);font-weight:700;
+    padding:0 16px 0 0;margin:0;cursor:pointer;
+    background-image:linear-gradient(45deg,transparent 50%,var(--ink-soft) 50%),
+                     linear-gradient(135deg,var(--ink-soft) 50%,transparent 50%);
+    background-position:right 5px center,right 1px center;
+    background-size:4px 4px,4px 4px;
+    background-repeat:no-repeat;
+  }
+  .chip select:focus-visible{outline:2px solid var(--accent2);outline-offset:3px;border-radius:4px}
 
   #fps{
     position:fixed;right:18px;top:18px;z-index:20;
@@ -232,6 +246,7 @@
 <div id="hud">
   <button class="chip" id="btnReset" title="Reiniciar (R)">↺ Reset sandía</button>
   <div class="chip"><span class="muted">Pedazos</span><b id="pieces">1</b></div>
+  <label class="chip" id="mechChip" hidden><span class="muted">Mecánica</span><select id="mech"></select></label>
   <div class="chip" id="srcChip"><span class="dot off" id="srcDot"></span><span id="srcLabel">Mouse</span></div>
 </div>
 
@@ -246,6 +261,8 @@
   </div>
   <div class="tag" id="camTag">tracking</div>
 </div>
+
+<div id="cross"><i></i><i></i></div>
 
 <div id="toast"></div>
 

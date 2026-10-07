@@ -101,3 +101,98 @@ test('reset deja de reportar poses', () => {
   pose.reset();
   expect(pose.getPoses(identity)[1]).toBeNull();
 });
+
+/* ── puntero y pinza ─────────────────────────────────────────────────────── */
+
+/**
+ * Mano con las cuatro landmarks que mira `getPointers`: muñeca (0), punta del
+ * pulgar (4), punta del índice (8) y nudillo del medio (9).
+ *
+ * `span` es la distancia muñeca → nudillo, o sea el tamaño aparente de la mano;
+ * `gap` la apertura de la pinza. El pinch es `gap / span`.
+ */
+function pinchHand({ gap, span = 0.3, cx = 0.5, cy = 0.5 }) {
+  const pts = [];
+  for (let i = 0; i < 21; i++) pts.push({ x: cx, y: cy });
+  pts[0] = { x: cx, y: cy + span };     // muñeca
+  pts[9] = { x: cx, y: cy };            // nudillo del medio
+  pts[4] = { x: cx - gap / 2, y: cy };  // pulgar
+  pts[8] = { x: cx + gap / 2, y: cy };  // índice
+  return pts;
+}
+
+/**
+ * Sostiene la misma mano varios frames para que el One Euro converja.
+ *
+ * Hace falta porque el puntero se mide sobre landmarks **suavizados**: un solo
+ * frame deja el filtro a mitad de camino y el test estaría midiendo el filtro,
+ * no la histéresis. Con 14 frames el error queda bajo 1e-4.
+ */
+function hold(pose, pts, frames = 14) {
+  for (let i = 0; i < frames; i++) {
+    hold.t = (hold.t || 1000) + 100;
+    pose.pushFrame(hold.t, [pts], [label('Left')]);
+  }
+  return pose.getPointers()[0];
+}
+
+test('el puntero sale del medio de pulgar e índice, espejado', () => {
+  const pose = createHandPose();
+  // pinza centrada en (0.3, 0.3) de la imagen: espejada cae en (0.4, 0.4) de NDC
+  const p = hold(pose, pinchHand({ gap: 0.2, cx: 0.3, cy: 0.3 }));
+  expect(p.nx).toBeCloseTo(0.4, 3);
+  expect(p.ny).toBeCloseTo(0.4, 3);
+
+  // una mano a la izquierda de la imagen tiene que dar puntero a la derecha
+  const q = hold(pose, pinchHand({ gap: 0.2, cx: 0.1, cy: 0.5 }));
+  expect(q.nx).toBeGreaterThan(0);
+});
+
+test('el pinch tiene histéresis', () => {
+  const pose = createHandPose();
+
+  // cerrada por debajo de PINCH_ON (0.25): presiona
+  expect(hold(pose, pinchHand({ gap: 0.06 })).pressed).toBe(true);
+
+  /* Abrir hasta la banda intermedia (0.30) **no** suelta. Sin histéresis, un
+     pinch sostenido al borde del umbral entra y sale varias veces por segundo y
+     el trazo se corta solo. */
+  const mid = hold(pose, pinchHand({ gap: 0.09 }));
+  expect(mid.pinch).toBeGreaterThan(0.25);
+  expect(mid.pinch).toBeLessThan(0.40);
+  expect(mid.pressed).toBe(true);
+
+  // pasando PINCH_OFF (0.40) sí suelta
+  expect(hold(pose, pinchHand({ gap: 0.15 })).pressed).toBe(false);
+
+  // y de vuelta en la banda intermedia sigue suelta: la histéresis va en los dos sentidos
+  expect(hold(pose, pinchHand({ gap: 0.09 })).pressed).toBe(false);
+});
+
+test('el pinch se normaliza por el tamaño de la mano', () => {
+  // la misma proporción de pinza, con la mano al doble de tamaño aparente
+  const chica = hold(createHandPose(), pinchHand({ gap: 0.03, span: 0.15 }));
+  const grande = hold(createHandPose(), pinchHand({ gap: 0.06, span: 0.30 }));
+
+  expect(chica.pinch).toBeCloseTo(grande.pinch, 3);
+  expect(chica.pressed).toBe(grande.pressed);
+  expect(chica.pressed).toBe(true);
+
+  // y la misma apertura absoluta con una mano grande no alcanza para cerrar
+  const lejos = hold(createHandPose(), pinchHand({ gap: 0.15, span: 0.15 }));
+  expect(lejos.pressed).toBe(false);
+});
+
+test('al perder la mano, el puntero desaparece y suelta la pinza', () => {
+  const pose = createHandPose();
+  expect(hold(pose, pinchHand({ gap: 0.05 })).pressed).toBe(true);
+
+  const t = hold.t + LOST_AFTER_MS + 50;
+  pose.pushFrame(t, [], []);
+  expect(pose.getPointers()[0]).toBe(null);
+
+  /* Al volver no puede aparecer ya presionada: la pinza se evalúa de nuevo
+     desde cero. */
+  const back = hold(pose, pinchHand({ gap: 0.30 }));
+  expect(back.pressed).toBe(false);
+});

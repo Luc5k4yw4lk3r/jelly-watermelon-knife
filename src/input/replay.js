@@ -62,6 +62,7 @@ export function createReplay() {
   return {
     load, setLoop, update,
     getPoses: (ndcToPlane) => pose.getPoses(ndcToPlane),
+    getPointers: () => pose.getPointers(),
     get done() { return !!frames && i >= frames.length; },
     get total() { return frames ? frames.length : 0; },
     get at() { return i; },

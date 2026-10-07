@@ -139,6 +139,7 @@ export function createHandTracking({ onStatus = () => {} } = {}) {
     stop,
     setRecorder,
     getPoses: (ndcToPlane) => (mode === 'hand' ? pose.getPoses(ndcToPlane) : EMPTY),
+    getPointers: () => (mode === 'hand' ? pose.getPointers() : EMPTY),
     get active() { return mode === 'hand'; },
   };
 }

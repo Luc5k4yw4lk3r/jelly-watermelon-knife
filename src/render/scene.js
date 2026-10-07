@@ -172,6 +172,54 @@ export function createScene(canvas) {
     return out;
   }
 
+  const _ray = new THREE.Vector3();
+  /** Hasta dónde se admite el punto apuntado, en XZ alrededor del objetivo. */
+  const GROUND_REACH = 6;
+
+  /**
+   * NDC → punto del **mundo** sobre el plano horizontal `y`.
+   *
+   * La mecánica de línea apunta sobre un plano horizontal, no sobre el plano de
+   * cámara que usa `ndcToPlane`, así que necesita su propio rayo. No hace falta
+   * un Raycaster: es una división.
+   *
+   * Mirando casi de canto, o desde abajo del plano, el rayo puede no cortarlo
+   * adelante de la cámara. En ese caso el punto se acota en vez de salir
+   * disparado: un AB inmenso cortaría media escena.
+   */
+  function ndcToGround(nx, ny, y, out) {
+    _ray.set(nx, ny, 0.5).unproject(camera).sub(camera.position);
+    const d = _ray.y;
+    let t = Math.abs(d) < 1e-6 ? -1 : (y - camera.position.y) / d;
+    if (!(t > 0)) t = GROUND_REACH * 4;
+    let x = camera.position.x + _ray.x * t;
+    let z = camera.position.z + _ray.z * t;
+    const dx = x - TARGET.x, dz = z - TARGET.z;
+    const r = Math.hypot(dx, dz);
+    if (r > GROUND_REACH) {
+      const sc = GROUND_REACH / r;
+      x = TARGET.x + dx * sc;
+      z = TARGET.z + dz * sc;
+    }
+    out.x = x; out.y = y; out.z = z;
+    return out;
+  }
+
+  /**
+   * Ancho del frustum de sombra del key light.
+   *
+   * La caja de ±2.6 encuadra la sandía y el cuchillo, que viven cerca del
+   * origen. Una cuchilla que flota en alto se sale, y entonces no proyecta
+   * sombra — justo lo que da la lectura de altura. Se ensancha solo mientras
+   * esa mecánica está activa: el mismo mapa de 1024 sobre más área es una
+   * sombra algo más blanda, y no hay razón para pagarla siempre.
+   */
+  function setShadowExtent(n) {
+    key.shadow.camera.left = -n; key.shadow.camera.right = n;
+    key.shadow.camera.top = n;   key.shadow.camera.bottom = -n;
+    key.shadow.camera.updateProjectionMatrix();
+  }
+
   /** Coordenadas del plano → punto de mundo, a `depth` unidades hacia la cámara. */
   function planeToWorld(a, b, depth, out) {
     out.x = basis.tx + basis.rx * a + basis.ux * b - basis.fx * depth;
@@ -185,7 +233,9 @@ export function createScene(canvas) {
   }
 
   return {
-    renderer, scene, camera, knifeParallax, basis, orbit,
-    resize, onResize, adaptResolution, ndcToPlane, planeToWorld, render,
+    renderer, scene, camera, knifeParallax, basis, orbit, target: TARGET,
+    get polar() { return polar; },
+    resize, onResize, adaptResolution, setShadowExtent,
+    ndcToPlane, planeToWorld, ndcToGround, render,
   };
 }

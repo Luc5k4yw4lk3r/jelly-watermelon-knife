@@ -1,9 +1,11 @@
+import { inControl } from './focus.js';
+
 /**
  * Todo el acceso al DOM de la interfaz, en un solo lugar.
  *
  * El HUD no sabe nada de física ni de render: recibe callbacks y expone setters.
  */
-export function createHud({ onReset, onUseCamera, onUseMouse }) {
+export function createHud({ onReset, onUseCamera, onUseMouse, mechanics = [], onMechanic }) {
   const el = {
     overlay:  document.getElementById('overlay'),
     btnCam:   document.getElementById('btnCam'),
@@ -17,7 +19,28 @@ export function createHud({ onReset, onUseCamera, onUseMouse }) {
     srcDot:   document.getElementById('srcDot'),
     srcLabel: document.getElementById('srcLabel'),
     toast:    document.getElementById('toast'),
+    mechChip: document.getElementById('mechChip'),
+    mechSel:  document.getElementById('mech'),
+    hint:     document.getElementById('hint'),
   };
+
+  /* Con una sola mecánica el selector es ruido; aparece cuando hay algo que
+     elegir. */
+  el.mechChip.hidden = mechanics.length < 2;
+  for (const m of mechanics) {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = m.label;
+    el.mechSel.appendChild(opt);
+  }
+  el.mechSel.addEventListener('change', () => onMechanic(el.mechSel.value));
+
+  /** El selector refleja la mecánica activa, y la pista de abajo la describe. */
+  function setMechanic(id) {
+    el.mechSel.value = id;
+    const m = mechanics.find((x) => x.id === id);
+    if (m && m.hint) el.hint.innerHTML = m.hint;
+  }
 
   let toastTimer = 0;
   function toast(msg) {
@@ -71,8 +94,12 @@ export function createHud({ onReset, onUseCamera, onUseMouse }) {
 
   el.btnReset.addEventListener('click', onReset);
   addEventListener('keydown', (e) => {
+    if (inControl(e)) return;
     if (e.key === 'r' || e.key === 'R') onReset();
   });
 
-  return { setSource, setTracking, setPieces, setFps, toast, showError, hideOverlay };
+  return {
+    setSource, setTracking, setPieces, setFps, setMechanic,
+    toast, showError, hideOverlay,
+  };
 }

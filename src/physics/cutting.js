@@ -7,7 +7,31 @@ import { tune } from '../config.js';
  * Este módulo es **puro** respecto del resto de la app: corta resortes y
  * devuelve qué pasó. Reconstruir la topología, lanzar el jugo, sonar el squish y
  * actualizar el HUD son decisiones de main.js, no de acá.
+ *
+ * `cut()` acepta opciones por llamada para que una mecánica pueda cortar por un
+ * plano que no es el de la cámara. Los defaults son los de siempre, así que el
+ * camino del cuchillo que sigue la mano no cambia:
+ *
+ *   basis       base en la que se proyecta y se barre el quad
+ *   kerf        ranura lateral máxima (ver `clampSweep`)
+ *   crossDepth  exige que el resorte **cruce** el plano, no solo que caiga adentro
+ *   juiceBasis  base que decide de qué lado del corte salpica el jugo
+ *
+ * Sobre `crossDepth`: el predicado de siempre es "el resorte cae dentro del área
+ * barrida", y el eje de profundidad se ignora porque la hoja es un prisma que
+ * atraviesa toda la escena. Eso es correcto para un barrido, que en pantalla es
+ * una astilla fina. Para un **plano** no alcanza: el quad cubre toda la fruta en
+ * las dos coordenadas que quedan, así que "caer adentro" lo cumple cada resorte
+ * y se desintegraría todo en vez de partirse en dos.
+ *
+ * Se probó además darle **grosor** al plano, cortando todo lo que tocara una
+ * losa de ±0.04 a su alrededor. Medido, es peor: el mismo tajo pasa de 1030 a
+ * 1704 resortes cortados y empieza a soltar partículas sueltas, porque también
+ * se lleva los resortes que corren paralelos al plano. El cambio de signo es el
+ * predicado correcto.
  */
+const NO_OPTS = {};
+
 export function createCutter(lat, basis) {
   const { N, M, pos, sprA, sprB, sprAlive, maxSprLen } = lat;
 
@@ -17,6 +41,7 @@ export function createCutter(lat, basis) {
   const pa = new Float32Array(N);   // sobre el eje "derecha"
   const pb = new Float32Array(N);   // sobre el eje "arriba"
   const pd = new Float32Array(N);   // hacia la cámara
+  const pc = new Float32Array(N);   // profundidad en la base del corte
 
   const quad = new Float64Array(8); // baseAnterior, puntaAnterior, puntaActual, baseActual
   const inBox = new Uint8Array(N);
@@ -58,12 +83,12 @@ export function createCutter(lat, basis) {
      vez de rebanar. Se conserva todo el barrido sobre el eje de la hoja (que es
      el corte de verdad) y se acota la componente lateral a un kerf. */
   const _sw = [0, 0];
-  function clampSweep(cx, cy, px, py, dx, dy) {
+  function clampSweep(cx, cy, px, py, dx, dy, kerf) {
     const ox = px - cx, oy = py - cy;
     const par = ox * dx + oy * dy;
     let qx = ox - par * dx, qy = oy - par * dy;
     const ql = Math.hypot(qx, qy);
-    if (ql > tune.MAX_KERF) { const sc = tune.MAX_KERF / ql; qx *= sc; qy *= sc; }
+    if (ql > kerf) { const sc = kerf / ql; qx *= sc; qy *= sc; }
     _sw[0] = cx + par * dx + qx;
     _sw[1] = cy + par * dy + qy;
   }
@@ -71,11 +96,16 @@ export function createCutter(lat, basis) {
   /**
    * @returns {{severed:number, spawns:number, spawnPoints:Float32Array, strength:number}}
    */
-  function cut(blade) {
+  function cut(blade, opts = NO_OPTS) {
+    const cb = opts.basis || basis;
+    const jb = opts.juiceBasis || basis;
+    const kerf = opts.kerf === undefined ? tune.MAX_KERF : opts.kerf;
+    const crossDepth = opts.crossDepth === true;
+
     const dx = blade.dirx, dy = blade.diry;
-    clampSweep(blade.x0, blade.y0, blade.px0, blade.py0, dx, dy);
+    clampSweep(blade.x0, blade.y0, blade.px0, blade.py0, dx, dy, kerf);
     quad[0] = _sw[0]; quad[1] = _sw[1];
-    clampSweep(blade.x1, blade.y1, blade.px1, blade.py1, dx, dy);
+    clampSweep(blade.x1, blade.y1, blade.px1, blade.py1, dx, dy, kerf);
     quad[2] = _sw[0]; quad[3] = _sw[1];
     quad[4] = blade.x1; quad[5] = blade.y1;
     quad[6] = blade.x0; quad[7] = blade.y0;
@@ -92,14 +122,20 @@ export function createCutter(lat, basis) {
     // proyección a la base de cámara + broadphase: un resorte solo puede
     // alcanzar el área barrida si alguno de sus extremos cae en el bbox del quad
     // expandido por el resorte más largo
-    const { rx, ry, rz, ux, uy, uz, fx, fy, fz, tx, ty, tz } = basis;
+    const { rx, ry, rz, ux, uy, uz, tx, ty, tz } = cb;
+    const cfx = cb.fx, cfy = cb.fy, cfz = cb.fz;
+    /* La profundidad se mide siempre contra la base del **jugo**, no contra la
+       del corte: es la que dice qué lado mira a la cámara. Cuando las dos son la
+       misma —el caso de siempre— sale exactamente el mismo número. */
+    const { fx, fy, fz, tx: jx, ty: jy, tz: jz } = jb;
     for (let p = 0; p < N; p++) {
       const o = p * 3;
       const dx = pos[o] - tx, dy = pos[o + 1] - ty, dz = pos[o + 2] - tz;
       const a = dx * rx + dy * ry + dz * rz;
       const b = dx * ux + dy * uy + dz * uz;
       pa[p] = a; pb[p] = b;
-      pd[p] = -(dx * fx + dy * fy + dz * fz);
+      if (crossDepth) pc[p] = dx * cfx + dy * cfy + dz * cfz;
+      pd[p] = -((pos[o] - jx) * fx + (pos[o + 1] - jy) * fy + (pos[o + 2] - jz) * fz);
       inBox[p] = (a >= minx && a <= maxx && b >= miny && b <= maxy) ? 1 : 0;
     }
 
@@ -108,6 +144,8 @@ export function createCutter(lat, basis) {
       if (!sprAlive[m]) continue;
       const a = sprA[m], b = sprB[m];
       if (!inBox[a] && !inBox[b]) continue;
+      // un corte por plano solo se lleva lo que lo cruza; ver `crossDepth`
+      if (crossDepth && (pc[a] < 0) === (pc[b] < 0)) continue;
       if (!segCrossesQuad(pa[a], pb[a], pa[b], pb[b])) continue;
       sprAlive[m] = 0;
       severed++;

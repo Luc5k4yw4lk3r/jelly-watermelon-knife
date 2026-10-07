@@ -1,4 +1,4 @@
-import { DT } from './config.js';
+import { DT, DEFAULT_MECHANIC } from './config.js';
 
 import { createLattice } from './physics/lattice.js';
 import { createTopology } from './physics/topology.js';
@@ -8,15 +8,16 @@ import { createCutter } from './physics/cutting.js';
 
 import { createScene } from './render/scene.js';
 import { createJellyMesh } from './render/jellyMesh.js';
-import { createKnife } from './render/knife.js';
 import { createJuice } from './render/juice.js';
 
-import { createBlade } from './input/blade.js';
 import { createMouse } from './input/mouse.js';
+import { createPointers } from './input/pointer.js';
 import { createHandTracking } from './input/handTracking.js';
 import { createOrbit } from './input/orbit.js';
 import { createReplay } from './input/replay.js';
 import { createRecorder } from './input/recorder.js';
+
+import { MECHANICS, mechanicById } from './mechanics/registry.js';
 
 import { sfx } from './audio/squish.js';
 import { createHud } from './ui/hud.js';
@@ -43,8 +44,6 @@ const cutter = createCutter(lat, view.basis);
 
 const jelly = createJellyMesh(lat, view.scene);
 const juice = createJuice(view.scene, view.basis);
-// un cuchillo por mano: el tracking reporta hasta dos
-const knives = [createKnife(view.scene, view.camera, view), createKnife(view.scene, view.camera, view)];
 
 view.onResize.push(juice.setPixelScale);
 
@@ -52,9 +51,7 @@ view.onResize.push(juice.setPixelScale);
 
 const replay = createReplay();
 const recorder = createRecorder();
-const hands = [createBlade(), createBlade()];
-const blades = hands.map((h) => h.blade);     // el solver recibe los estados
-const mouse = createMouse();
+const mouse = createMouse(canvas);
 const mousePoses = [null, null];
 const orbit = createOrbit(canvas, view.orbit);
 const hand = createHandTracking({
@@ -63,6 +60,8 @@ const hand = createHandTracking({
     if (tracking !== undefined) hud.setTracking(tracking);
   },
 });
+
+const pointers = createPointers({ mouse, hand, replay });
 
 let source = 'none';   // 'hand' | 'mouse' | 'replay'
 hand.setRecorder(recorder);
@@ -90,13 +89,58 @@ async function useReplay(url) {
   hud.toast(n + ' frames de replay');
 }
 
+/* ── mecánicas ───────────────────────────────────────────────────────────── */
+
+/**
+ * Los efectos de un corte viven **acá y solo acá**: el cutter es puro y las
+ * mecánicas deciden *cuándo* cortar, no qué pasa después.
+ */
+function onCut(cut, blade, knife) {
+  cutEvents++; severedTotal += cut.severed;
+  rebuildAfterTopologyChange();
+  juice.burst(cut, blade);
+  sfx.squish(cut.strength);
+  if (knife) knife.flash();
+}
+
+const ctx = {
+  view, lat, topo, shape, jelly, juice, cutter, solver,
+  onCut,
+  getPieces: () => pieceCount,
+};
+
+/* Se construyen todas de entrada y se prenden y apagan con enter/exit: cambiar
+   de mecánica no puede pagar la creación de mallas en el frame del cambio. */
+const built = new Map();
+for (const m of MECHANICS) built.set(m.id, m.create(ctx));
+
+const wanted = new URLSearchParams(location.search).get('mech');
+let mechId = mechanicById(wanted) ? wanted : DEFAULT_MECHANIC;
+let mech = built.get(mechId);
+mech.enter();
+
+function setMechanic(id) {
+  const next = built.get(id);
+  if (!next || next === mech) return;
+  /* La saliente cancela lo que tenga en curso y se esconde. La lattice no se
+     toca, así que los pedazos se conservan solos. */
+  mech.exit();
+  mech = next;
+  mechId = id;
+  mech.enter();
+  hud.setMechanic(id);
+}
+
 /* ── UI ──────────────────────────────────────────────────────────────────── */
 
 const hud = createHud({
   onReset: reset,
   onUseCamera: () => { sfx.init(); return useCamera(); },
   onUseMouse: () => { sfx.init(); useMouse(); },
+  mechanics: MECHANICS,
+  onMechanic: setMechanic,
 });
+hud.setMechanic(mechId);
 
 createTuner({ onStiffnessChange: lat.refreshStiffness, recorder, hud });
 
@@ -123,7 +167,10 @@ function rebuildAfterTopologyChange() {
 let acc = 0, lastT = performance.now(), fpsEma = 60, physMs = 0;
 
 installDevtools({
-  lat, topo, jelly, juice, blades, replay,
+  lat, topo, jelly, juice, replay,
+  getBlades: () => mech.blades,
+  getMechanic: () => mechId,
+  getMechanicState: () => (mech.devState ? mech.devState() : null),
   getPieces: () => pieceCount,
   getPhysMs: () => physMs,
   getCuts: () => ({ events: cutEvents, severed: severedTotal }),
@@ -131,6 +178,11 @@ installDevtools({
 
 const replayUrl = new URLSearchParams(location.search).get('replay');
 if (replayUrl) useReplay(replayUrl).catch((e) => hud.showError(e.message));
+
+// se reusa: el loop no debe asignar nada por frame
+const io = { poses: null, pointers: null, source: 'none', rawDt: DT, replayDt: 0 };
+// agarre de referencia para las mecánicas que no orientan la hoja por movimiento
+const ORIGIN = { x: 0, y: 0 };
 
 function frame(now) {
   requestAnimationFrame(frame);
@@ -152,29 +204,17 @@ function frame(now) {
     poses = replay.getPoses(view.ndcToPlane);
   } else {
     mousePoses[0] = source === 'mouse'
-      ? mouse.getPose(view.ndcToPlane, { x: blades[0].gx, y: blades[0].gy })
+      ? mouse.getPose(view.ndcToPlane, mech.grip ? mech.grip() : ORIGIN)
       : null;
     poses = mousePoses;   // el mouse maneja un solo cuchillo
   }
 
-  for (let i = 0; i < hands.length; i++) {
-    const h = hands[i];
-    // en replay la velocidad usa el dt grabado: así el tajo es el que hizo la
-    // mano, y no el que deja el framerate de la máquina que lo reproduce
-    h.update(dt, poses[i] || null, source === 'replay' && replayDt ? replayDt : rawDt);
-
-    // CORTE: una hoja rápida elimina todo resorte cuyo segmento cruce el área barrida
-    if (h.shouldCut()) {
-      const cut = cutter.cut(h.blade);
-      if (cut.severed) {
-        cutEvents++; severedTotal += cut.severed;
-        rebuildAfterTopologyChange();
-        juice.burst(cut, h.blade);
-        sfx.squish(cut.strength);
-        knives[i].flash();
-      }
-    }
-  }
+  io.poses = poses;
+  io.pointers = pointers.get(source);
+  io.source = source;
+  io.rawDt = rawDt;
+  io.replayDt = replayDt;
+  mech.update(dt, io);
 
   const frozen = DEV && devState.paused;
 
@@ -182,12 +222,12 @@ function frame(now) {
   let steps = 0;
   const t0 = performance.now();
   if (!frozen) {
+    const blades = mech.blades;
     while (acc >= DT && steps < 3) { solver.step(DT, blades); acc -= DT; steps++; }
   } else acc = 0;
   physMs = physMs * 0.9 + (performance.now() - t0) * 0.1;
   if (acc > DT) acc = 0;
 
-  for (let i = 0; i < knives.length; i++) knives[i].update(blades[i], dt);
   if (!frozen) juice.update(dt);
   if (DEV && devState.juiceVisible !== null) juice.points.visible = devState.juiceVisible;
   jelly.update(topo);

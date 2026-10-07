@@ -17,7 +17,10 @@ export const DEV = new URLSearchParams(location.search).has('dev');
  */
 export const devState = { paused: false, juiceVisible: null };
 
-export function installDevtools({ lat, topo, jelly, juice, blades, replay, getPieces, getPhysMs, getCuts }) {
+export function installDevtools({
+  lat, topo, jelly, juice, replay,
+  getBlades, getMechanic, getMechanicState, getPieces, getPhysMs, getCuts,
+}) {
   if (!DEV) return;
 
   /**
@@ -110,14 +113,35 @@ export function installDevtools({ lat, topo, jelly, juice, blades, replay, getPi
        hace flaky la aserción sobre el contador de pedazos. */
     get cuts() { return getCuts(); },
     get replay() { return replay ? { total: replay.total, done: replay.done, at: replay.at } : null; },
-    /** Estado de las hojas: lo primero que hay que mirar si un tajo no corta. */
+    /** Estado de las hojas: lo primero que hay que mirar si un tajo no corta.
+        Depende de la mecánica activa, y hay mecánicas que no tienen hojas. */
     get blades() {
-      return blades.map((b) => ({
+      return getBlades().map((b) => ({
         active: b.active,
         opacity: +b.opacity.toFixed(2),
         speed: +b.speed.toFixed(2),
         rot: +b.rot.toFixed(3),
       }));
+    },
+    get mechanic() { return getMechanic(); },
+    /** Lo que la mecánica activa quiera exponer; null si no expone nada. */
+    get mechanicState() { return getMechanicState(); },
+    /** Tamaños de las componentes conexas vivas, de mayor a menor.
+        El contador de pedazos ignora las de menos de 10 partículas; esto muestra
+        todo, que es lo que hace falta cuando un corte se ve y no separa. */
+    get components() {
+      const { N, M, sprA, sprB, sprAlive } = lat;
+      const par = new Int32Array(N);
+      for (let i = 0; i < N; i++) par[i] = i;
+      const find = (x) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+      for (let m = 0; m < M; m++) {
+        if (!sprAlive[m]) continue;
+        const a = find(sprA[m]), b = find(sprB[m]);
+        if (a !== b) par[a] = b;
+      }
+      const size = new Int32Array(N);
+      for (let i = 0; i < N; i++) size[find(i)]++;
+      return Array.from(size).filter((n) => n > 0).sort((a, b) => b - a);
     },
     get juiceCount() { return juice.count; },
     get physMs() { return +getPhysMs().toFixed(2); },

@@ -1,6 +1,6 @@
 # Pendientes
 
-Estado al cerrar **v0.3.0**. Ordenado por lo que más mueve la aguja, no por
+Estado al cerrar **v0.4.0**. Ordenado por lo que más mueve la aguja, no por
 esfuerzo. Cada ítem dice qué se sabe ya, para no tener que redescubrirlo.
 
 ---
@@ -13,7 +13,7 @@ que el gesto se sienta natural.
 
 Cómo capturar uno real: abrir la app, `D` → **Grabar landmarks**, activar la
 cámara, hacer el gesto, **Detener y bajar**. Conviene uno por caso: empuje lento,
-tajo rápido, dos manos.
+tajo rápido, dos manos, y ahora también **una pinza** para la mecánica de línea.
 
 Es lo primero de la lista porque además cierra el otro pendiente que sigue:
 
@@ -26,6 +26,11 @@ stream sintético, que corre MediaPipe entero (modelo, delegate GPU,
 Sin verificar: el mapeo landmarks→cuchillo, si el espejado se siente natural, la
 ganancia del movimiento, y todo el camino de dos manos. Puede que haya que ajustar
 `BLADE_LEN` o la escala del mapeo.
+
+La mecánica de línea hereda el pendiente entero: **el pinch nunca se probó con una
+mano real**. Los umbrales `PINCH_ON 0.25` / `PINCH_OFF 0.40` son un punto de
+partida, no un número medido, y la normalización por tamaño de mano (muñeca →
+nudillo del medio) solo se verificó con landmarks sintéticos.
 
 ## 3. Geometría sub-celda de la cara de corte · *el ítem grande*
 
@@ -76,6 +81,21 @@ No toca la física: `cellSolid` solo alimenta el render.
 - **Pinza para agarrar**: distancia pulgar–índice bajo un umbral cerca de un pedazo
   para engancharlo y tirarlo. Quedó afuera del hito de jugabilidad.
 
+## De la mecánica «Cuchillo»
+
+- **Nunca se midieron los 60 fps con ~20 piezas** (R40 de la spec). Con 3 o 4 anda
+  bien; el número de la spec está sin comprobar.
+- **La cuchilla no empuja la gelatina mientras baja.** No se pidió, y meterla en el
+  array de hojas del solver no sirve: ahí las hojas se colisionan como cápsulas en
+  espacio de cámara extruidas por toda la profundidad. Haría falta una colisión por
+  plano aparte.
+- **Un trazo que no cruza la fruta entera corta y no separa.** Es correcto —el
+  corte está acotado a la línea, que es lo que se pidió— pero se lee como un fallo:
+  la cara de corte aparece y la pieza sigue siendo una. Un indicio visual de hasta
+  dónde llega el corte lo volvería obvio.
+- **La silueta escalonada también le toca.** Es el ítem 3 de arriba, y ahora se ve
+  en dos mecánicas en vez de una.
+
 ## Deuda de tests
 
 - **El replay fija la entrada, no la simulación.** La física acumula pasos fijos
@@ -86,6 +106,11 @@ No toca la física: `cellSolid` solo alimenta el render.
   sabotear y no se reprodujo: ese bug necesitaba **dos** condiciones —buffer creado
   vacío *y* subidas parciales— y la segunda ya no existe en el código. Queda
   anotado en vez de fingir cobertura.
+- **La planaridad sobre la malla viva depende de la máquina.** `rms` incluye el
+  bamboleo, y cuánto bamboleo queda después de una espera de tiempo real depende
+  del framerate: 0.24–0.35 lento, 0.026–0.042 rápido. La aserción quedó como prueba
+  de vida; comparar antes y después es trabajo de `restRms`. Entender por qué el
+  bamboleo decae tan distinto sigue pendiente.
 - **La suite de navegador tarda ~4 min**, porque corre en serie y el navegador
   renderiza por software. Para iterar sobre lógica está `pnpm test --project=node`,
   que tarda segundos.
