@@ -11,6 +11,7 @@ import { createJellyMesh } from './render/jellyMesh.js';
 import { createJuice } from './render/juice.js';
 
 import { createMouse } from './input/mouse.js';
+import { createPointers } from './input/pointer.js';
 import { createHandTracking } from './input/handTracking.js';
 import { createOrbit } from './input/orbit.js';
 import { createReplay } from './input/replay.js';
@@ -50,7 +51,7 @@ view.onResize.push(juice.setPixelScale);
 
 const replay = createReplay();
 const recorder = createRecorder();
-const mouse = createMouse();
+const mouse = createMouse(canvas);
 const mousePoses = [null, null];
 const orbit = createOrbit(canvas, view.orbit);
 const hand = createHandTracking({
@@ -59,6 +60,8 @@ const hand = createHandTracking({
     if (tracking !== undefined) hud.setTracking(tracking);
   },
 });
+
+const pointers = createPointers({ mouse, hand, replay });
 
 let source = 'none';   // 'hand' | 'mouse' | 'replay'
 hand.setRecorder(recorder);
@@ -177,7 +180,7 @@ const replayUrl = new URLSearchParams(location.search).get('replay');
 if (replayUrl) useReplay(replayUrl).catch((e) => hud.showError(e.message));
 
 // se reusa: el loop no debe asignar nada por frame
-const io = { poses: null, source: 'none', rawDt: DT, replayDt: 0 };
+const io = { poses: null, pointers: null, source: 'none', rawDt: DT, replayDt: 0 };
 // agarre de referencia para las mecánicas que no orientan la hoja por movimiento
 const ORIGIN = { x: 0, y: 0 };
 
@@ -207,6 +210,7 @@ function frame(now) {
   }
 
   io.poses = poses;
+  io.pointers = pointers.get(source);
   io.source = source;
   io.rawDt = rawDt;
   io.replayDt = replayDt;

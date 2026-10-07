@@ -1,4 +1,13 @@
 import { makeOneEuro } from './oneEuro.js';
+import { tune } from '../config.js';
+
+/* El suavizado se lee de `tune` en cada llamada, así que el panel lo mueve en
+   vivo en vez de necesitar una recarga. */
+const EURO = {
+  get minCutoff() { return tune.EURO_MIN_CUTOFF; },
+  get beta() { return tune.EURO_BETA; },
+  dCutoff: 1.0,
+};
 
 export const HANDS = 2;
 export const LOST_AFTER_MS = 180;
@@ -27,7 +36,7 @@ export const HAND_LINKS = [
  * intercambian solos.
  */
 export function createHandPose() {
-  const euro = [makeOneEuro(42, 1.6, 0.9, 1.0), makeOneEuro(42, 1.6, 0.9, 1.0)];
+  const euro = [makeOneEuro(42, EURO), makeOneEuro(42, EURO)];
   const lm = new Float32Array(HANDS * 42);   // landmarks suavizados (normalizados, 21 x xy)
   const seen = [false, false];
   const lastAt = [-1e9, -1e9];
@@ -78,6 +87,7 @@ export function createHandPose() {
   function reset() {
     seen[0] = seen[1] = false;
     lastAt[0] = lastAt[1] = -1e9;
+    pinched[0] = pinched[1] = false;
     euro[0].reset(); euro[1].reset();
   }
 
@@ -113,5 +123,50 @@ export function createHandPose() {
     return out;
   }
 
-  return { pushFrame, reset, getPoses, landmarks: lm, seen };
+  /* ── puntero y pinza ───────────────────────────────────────────────────── */
+
+  const pinched = [false, false];
+  const pointers = [
+    { nx: 0, ny: 0, pressed: false, pinch: 1, source: 'hand' },
+    { nx: 0, ny: 0, pressed: false, pinch: 1, source: 'hand' },
+  ];
+  const outPtr = [null, null];
+
+  /**
+   * Puntero y "botón" para las mecánicas que apuntan en vez de tajar.
+   *
+   * La posición es el punto medio pulgar–índice, espejada igual que `getPoses`.
+   * El pinch se mide **normalizado por el tamaño de la mano** —la distancia
+   * muñeca → nudillo del medio—, así que la misma pinza cuenta igual cerca y
+   * lejos de la cámara. La histéresis es lo que evita que un pinch al borde del
+   * umbral parpadee entre presionado y suelto varias veces por segundo.
+   *
+   * @returns {Array<null|{nx:number,ny:number,pressed:boolean,pinch:number,source:string}>}
+   */
+  function getPointers() {
+    for (let slot = 0; slot < HANDS; slot++) {
+      if (!seen[slot]) { pinched[slot] = false; outPtr[slot] = null; continue; }
+      const base = slot * 42;
+      const tx = lm[base + 8],  ty = lm[base + 9];    // 4: punta del pulgar
+      const ix = lm[base + 16], iy = lm[base + 17];   // 8: punta del índice
+      const wx = lm[base],      wy = lm[base + 1];    // 0: muñeca
+      const mx = lm[base + 18], my = lm[base + 19];   // 9: nudillo del medio
+
+      const span = Math.hypot(mx - wx, my - wy);
+      const pinch = span > 1e-4 ? Math.hypot(ix - tx, iy - ty) / span : 1;
+      if (pinched[slot]) {
+        if (pinch > tune.PINCH_OFF) pinched[slot] = false;
+      } else if (pinch < tune.PINCH_ON) pinched[slot] = true;
+
+      const p = pointers[slot];
+      p.nx = 1 - (tx + ix);     // = 1 - 2 * punto medio, o sea NDC y espejado
+      p.ny = 1 - (ty + iy);
+      p.pinch = pinch;
+      p.pressed = pinched[slot];
+      outPtr[slot] = p;
+    }
+    return outPtr;
+  }
+
+  return { pushFrame, reset, getPoses, getPointers, landmarks: lm, seen };
 }

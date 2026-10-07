@@ -262,13 +262,13 @@ Se completa a medida que se implementa. `—` = todavía no.
 | R5 | AC3 | — |
 | R6 | AC2 | — |
 | R7 | estructural | ✔ las mecánicas reciben el mismo `io` |
-| R8 | AC6, AC15 | — |
+| R8 | AC6, AC15 | parcial: AC6 ✔ |
 | R9 | AC15, AC16 | — |
-| R10 | AC6 | — |
-| R11 | AC5 | — |
-| R12 | AC4 | — |
+| R10 | AC6 | ✔ |
+| R11 | AC5 | ✔ |
+| R12 | AC4 | ✔ (los dos sabotajes dieron rojo) |
 | R13 | AC27 `[M]` | — |
-| R14 | AC7 | — |
+| R14 | AC7 | parcial: el puntero suelta al perder la mano |
 | R15 | AC22 `[M]` | — |
 | R16 | AC27 `[M]` | — |
 | R17 | AC26 `[M]` | — |

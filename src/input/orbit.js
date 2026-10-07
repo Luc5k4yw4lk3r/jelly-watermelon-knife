@@ -1,9 +1,9 @@
 /**
  * Órbita de cámara con botón derecho (o dos dedos), y flechas del teclado.
  *
- * El botón izquierdo queda libre: en modo mouse el cuchillo sigue al puntero
- * todo el tiempo, así que usar arrastre izquierdo para orbitar haría las dos
- * cosas a la vez.
+ * El botón izquierdo queda libre: en la mecánica de tajo libre el cuchillo sigue
+ * al puntero todo el tiempo, y en la de línea el arrastre izquierdo dibuja. Para
+ * quien prefiera el izquierdo, **Shift+izquierdo** también orbita.
  */
 const DRAG_SPEED = 0.006;
 const KEY_SPEED = 1.6;      // rad/s
@@ -15,7 +15,8 @@ export function createOrbit(canvas, orbit) {
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
   canvas.addEventListener('pointerdown', (e) => {
-    if (e.button !== 2 && e.button !== 1) return;
+    const withShift = e.button === 0 && e.shiftKey;
+    if (e.button !== 2 && e.button !== 1 && !withShift) return;
     dragging = true; lastX = e.clientX; lastY = e.clientY;
     canvas.setPointerCapture(e.pointerId);
   });

@@ -71,6 +71,22 @@ export const tune = {
   CUT_SPEED: 4.0,           // u/s a partir de las cuales corta en vez de empujar
   MAX_KERF: 0.085,          // ranura lateral máxima que puede abrir un barrido
   MAX_CUT_ROT: 0.18,        // rad/frame; una hoja que gira pica en vez de cortar
+
+  // puntero de mano: pinza con histéresis, normalizada por el tamaño de la mano
+  PINCH_ON: 0.25,           // dist(pulgar,índice)/dist(muñeca,medio) para cerrar
+  PINCH_OFF: 0.40,          // y para abrir; la banda es lo que evita el parpadeo
+  EURO_MIN_CUTOFF: 1.6,
+  EURO_BETA: 0.9,
+
+  // mecánica "Cuchillo": dibujar una línea y tajar
+  HOVER_H: 1.45,            // altura de espera sobre el centro de la fruta
+  ALIGN_MS: 170,            // alinearse sobre AB
+  STRIKE_MS: 340,           // bajar; con ease-in, para que se sienta pesado
+  RETRACT_MS: 250,          // volver a subir
+  MIN_CUT_LEN: 0.35,        // línea más corta que esto no corta
+  CUT_MARGIN: 0.06,         // cuánto se extiende el corte más allá de A y de B
+  SEP_IMPULSE: 0.02,        // empujón que abre las mitades; techo en MAX_STEP_DISP
+  MAX_PIECES: 24,
 };
 
 /** Copia de los valores de fábrica, para que el panel pueda restaurarlos. */
