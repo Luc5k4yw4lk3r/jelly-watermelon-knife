@@ -96,6 +96,25 @@ test('Esc cancela el apuntado', () => {
   expect(runToIdle(fsm, at({ x: 1.2 })).cuts).toBe(0);
 });
 
+test('después de cancelar hay que soltar para volver a apuntar', () => {
+  /* Con el botón todavía apretado, cancelar y que el frame siguiente abra un
+     trazo nuevo hace que Esc parezca no hacer nada: el estado vuelve a AIMING
+     enseguida y el usuario ve lo mismo que antes. */
+  const fsm = createLineKnifeFsm();
+  fsm.enter(false);
+  fsm.update(16, at({ pressed: true }));
+  fsm.update(16, at({ pressed: true, x: 1.2 }));
+  expect(fsm.update(16, at({ pressed: true, x: 1.2, cancel: true })).state).toBe(IDLE);
+
+  // sigue apretado: no puede empezar otro
+  expect(fsm.update(16, at({ pressed: true, x: 1.4 })).state).toBe(IDLE);
+  expect(fsm.update(16, at({ pressed: true, x: 1.6 })).state).toBe(IDLE);
+
+  // soltar y volver a apretar sí
+  fsm.update(16, at({ x: 1.6 }));
+  expect(fsm.update(16, at({ pressed: true, x: 1.6 })).state).toBe(AIMING);
+});
+
 test('perder la mano cancela el apuntado', () => {
   const fsm = createLineKnifeFsm();
   fsm.enter(false);

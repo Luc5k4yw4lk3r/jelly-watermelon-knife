@@ -77,7 +77,13 @@ export function createLineKnifeFsm() {
 
       case AIMING: {
         out.bladeY = hoverY;
-        if (input.cancel || input.lost) { state = IDLE; t = 0; break; }
+        if (input.cancel || input.lost) {
+          /* Cancelar **exige soltar**. Sin esto, con el botón todavía apretado el
+             IDLE del frame siguiente abre un trazo nuevo desde donde quedó el
+             puntero: en pantalla, Esc parece no hacer nada. */
+          state = IDLE; t = 0; needRelease = true;
+          break;
+        }
         out.bx = input.x; out.bz = input.z;
         t += dtMs;
         align = Math.min(1, t / Math.max(1, tune.ALIGN_MS));

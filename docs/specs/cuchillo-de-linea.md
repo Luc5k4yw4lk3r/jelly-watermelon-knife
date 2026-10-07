@@ -159,6 +159,7 @@ IDLE → AIMING → STRIKING → RETRACTING → IDLE
 | **AC28** | El corte cubre la fruta entera, flote donde flote la cuchilla. | `[N]` «el corte cubre la fruta entera…» | R30 |
 | **AC29** | Entrar a la mecánica con el botón ya apretado no abre un trazo. | `[N]` «entrar a la mecánica con el botón ya apretado…» | R39 |
 | **AC30** | La hoja baja, pasa el piso y vuelve a subir. | `[N]` «la hoja baja, atraviesa el piso y vuelve a subir» | R26, R37 |
+| **AC31** | Después de cancelar, con el botón todavía apretado no se abre un trazo nuevo. | `[N]` «después de cancelar hay que soltar para volver a apuntar» | R25, R39 |
 
 ### 3.1 Requisitos sin test automático
 
@@ -253,7 +254,14 @@ un píxel desplaza el punto apuntado decenas de centímetros, y dibujar una lín
 imposible. Al entrar a esta mecánica la cámara baja a ~35 grados, con transición, y
 suelta el objetivo en cuanto lo alcanza para no pelear con la órbita del usuario.
 
-### 4.9 El selector va en el HUD, no en el panel de tuneo
+### 4.9 Cancelar exige soltar
+
+Encontrado probando a mano, que es justamente para lo que están los criterios
+`[M]`: `Esc` cancelaba y el frame siguiente abría un trazo nuevo desde donde estaba
+el puntero, porque el botón seguía apretado. En pantalla, `Esc` parecía no hacer
+nada. Después de cancelar hay que soltar, igual que al entrar a la mecánica.
+
+### 4.10 El selector va en el HUD, no en el panel de tuneo
 
 El panel `D` está oculto por CSS debajo de 560 px de ancho. Un control de juego ahí
 sería inalcanzable en móvil.
@@ -321,7 +329,7 @@ Se completa a medida que se implementa. `—` = todavía no.
 | R22 | AC15 | ✔ |
 | R23 | AC22 `[M]` | ✔ a ojo |
 | R24 | AC23 `[M]` | ✔ a ojo |
-| R25 | AC8 | ✔ |
+| R25 | AC8, AC31 | ✔ |
 | R26 | AC10, AC15, AC30 | ✔ |
 | R27 | AC9, AC16 | ✔ |
 | R28 | AC12 | ✔ (el primer test no distinguía cruce de cercanía; se rehízo) |
@@ -335,7 +343,7 @@ Se completa a medida que se implementa. `—` = todavía no.
 | R36 | AC20 | ✔ |
 | R37 | AC23 `[M]`, AC30 | ✔ |
 | R38 | AC19 | ✔ |
-| R39 | AC10, AC29 | ✔ |
+| R39 | AC10, AC29, AC31 | ✔ |
 | R40 | AC25 `[M]` | ⏳ sin medir con 20 piezas |
 
 **Pendientes reales**, no omisiones: R13 y R16 necesitan una webcam, y heredan el
