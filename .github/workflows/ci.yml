@@ -31,9 +31,14 @@ jobs:
           test "$files" -eq 1
           test -f dist/index.html
 
+      # los unitarios de tracking no necesitan navegador: fallan en segundos
+      - run: pnpm test --project=node
+        env:
+          CI: true
+
       - run: npx playwright install --with-deps chrome
 
-      - run: pnpm test
+      - run: pnpm test --project=chrome
         env:
           CI: true
 
