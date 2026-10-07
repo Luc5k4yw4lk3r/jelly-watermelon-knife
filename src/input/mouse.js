@@ -1,0 +1,42 @@
+/**
+ * Fallback a mouse, con la misma interfaz de pose que el tracking de mano.
+ *
+ * El cuchillo apunta hacia donde va: viajar sobre su propio eje es lo que
+ * mantiene el área barrida como una astilla fina. Si apuntara perpendicular al
+ * movimiento, el barrido sería un rectángulo tan ancho como larga la hoja y el
+ * cuchillo excavaría la sandía en vez de rebanarla.
+ */
+export function createMouse() {
+  const state = { nx: 0, ny: 0, seen: false, dirx: 0, diry: 1 };
+
+  addEventListener('pointermove', (e) => {
+    state.nx = (e.clientX / innerWidth) * 2 - 1;
+    state.ny = -((e.clientY / innerHeight) * 2 - 1);
+    state.seen = true;
+  }, { passive: true });
+  addEventListener('pointerleave', () => { state.seen = false; });
+
+  const _p = { x: 0, y: 0 };
+
+  function getPose(ndcToPlane, prevGrip) {
+    if (!state.seen) return null;
+    ndcToPlane(state.nx, state.ny, _p);
+    const mdx = _p.x - prevGrip.x, mdy = _p.y - prevGrip.y;
+    const ml = Math.hypot(mdx, mdy);
+    if (ml > 0.004) {
+      const tx = mdx / ml, ty = mdy / ml;
+      if (tx * state.dirx + ty * state.diry < 0.5) {
+        state.dirx = tx; state.diry = ty;   // giro brusco: saltar, nunca barrer el abanico
+      } else {
+        const a = 0.35;
+        state.dirx += (tx - state.dirx) * a;
+        state.diry += (ty - state.diry) * a;
+        const nl = Math.hypot(state.dirx, state.diry) || 1;
+        state.dirx /= nl; state.diry /= nl;
+      }
+    }
+    return { gx: _p.x, gy: _p.y, dirx: state.dirx, diry: state.diry };
+  }
+
+  return { getPose, state };
+}
