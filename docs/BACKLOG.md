@@ -1,6 +1,6 @@
 # Pendientes
 
-Estado al cerrar **v0.4.0**. Ordenado por lo que más mueve la aguja, no por
+Estado al cerrar **v0.5.0**. Ordenado por lo que más mueve la aguja, no por
 esfuerzo. Cada ítem dice qué se sabe ya, para no tener que redescubrirlo.
 
 ---
@@ -81,6 +81,24 @@ No toca la física: `cellSolid` solo alimenta el render.
 - **Pinza para agarrar**: distancia pulgar–índice bajo un umbral cerca de un pedazo
   para engancharlo y tirarlo. Quedó afuera del hito de jugabilidad.
 
+## Del puntaje
+
+- **El tajo libre no puntúa.** Corta con un cuadrilátero barrido, no con un plano, y
+  ahí un reparto no está definido. Se podría medir el volumen de los hijos contra el
+  del padre —que ya se calcula— y puntuar eso, aceptando que el número incluye el
+  material que se llevó el tajo.
+- **El «peso» con densidades distintas para pulpa y cáscara** no se implementó, y no
+  hay bandera: una opción de config que no hace nada es peor que no tenerla. La
+  información necesaria ya está —`faceKind` distingue corteza de pulpa y el radio en
+  reposo da el grosor de la cáscara—; lo que falta son dos densidades, que serían
+  números inventados hasta que alguien decida qué significan.
+- **Resaltar la cara de corte con el color del rango** quedó afuera. Era opcional, y
+  el shader colorea por tipo de cara sin saber de piezas, así que pide un uniform más
+  o un atributo por vértice.
+- **El volumen absoluto queda 1% abajo** del elipsoide analítico, porque las celdas
+  son hexaedros rectos inscritos en una superficie curva. Da igual para proporciones;
+  importaría si alguna vez se mostrara un volumen en unidades.
+
 ## De la mecánica «Cuchillo»
 
 - **Nunca se midieron los 60 fps con ~20 piezas** (R40 de la spec). Con 3 o 4 anda
@@ -111,6 +129,10 @@ No toca la física: `cellSolid` solo alimenta el render.
   del framerate: 0.24–0.35 lento, 0.026–0.042 rápido. La aserción quedó como prueba
   de vida; comparar antes y después es trabajo de `restRms`. Entender por qué el
   bamboleo decae tan distinto sigue pendiente.
+- **La suite de navegador pasa de 4 a ~8 min** con los tests de puntaje, porque cada
+  trazo se lleva decenas de frames a 10 fps. Lo que la haría corta de verdad es poder
+  cortar sin dibujar —una entrada directa de línea bajo `?dev`—, y dejar el gesto solo
+  para los tests que lo prueban.
 - **La suite de navegador tarda ~4 min**, porque corre en serie y el navegador
   renderiza por software. Para iterar sobre lógica está `pnpm test --project=node`,
   que tarda segundos.

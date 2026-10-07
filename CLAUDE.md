@@ -133,6 +133,32 @@ dibujan las visibles, empaquetadas desde el slot 0. Una celda muere si pierde
 cualquiera de sus 12 aristas estructurales, y las caras de las vecinas que quedan
 sin par pasan a ser visibles. El shader las colorea por radio.
 
+### Medir el corte
+
+El puntaje sale de tres módulos puros que se prueban en Node:
+
+- **`physics/volume.js`** mide **en espacio de reposo**, porque `rest` no lo escribe
+  nadie después de construirse: el volumen de cada celda es una constante y el
+  número no se mueve mientras la gelatina tiembla.
+- **`physics/pieces.js`** da identidad estable a los pedazos, que la simulación no
+  tiene: los slots de `shapeMatching` se renumeran en cada reconstrucción.
+- **`score/cutScore.js`** es aritmética y nada más.
+
+**El reparto contra un plano recorta tetraedros, no clasifica celdas.** No es un
+detalle de implementación: clasificando celdas enteras el reparto salta de 50/50 a
+39/61 en cuanto el plano cruza una capa de partículas —no existe nada en el medio— y
+los rangos intermedios no tendrían dónde caer. Está medido en los tests.
+
+Las distancias al plano se toman sobre las posiciones **deformadas**, que es donde
+ocurre el corte, y la interpolación se aplica a las de **reposo**.
+
+Un tajo mata el 9% de las celdas. Repartir cada celda entre las piezas de sus 8
+esquinas hace que la suma siga dando el total.
+
+La medición cuelga de `rebuildAfterTopologyChange(plane)`, que es el único punto por
+el que pasan todos los cambios de topología. **Solo se puntúa si hay plano**: el tajo
+libre barre un cuadrilátero y ahí un split no está definido.
+
 ### Cortar por un plano que no es el de la cámara
 
 `cut()` acepta opciones **por llamada**, con los defaults de siempre, así que el
@@ -226,6 +252,21 @@ por software a pocos fps: el mismo gesto en píxeles por frame da velocidades
 completamente distintas según la máquina. `tests/behaviour.spec.js` tiene el
 helper `swipe()` que hace la conversión.
 
+**Nunca esperes un tiempo fijo por una animación.** El navegador renderiza por
+software y la máquina puede estar cargada: un golpe de cuchilla que dura 600 ms de
+reloj puede llevarse varios segundos de reloj real, y un `waitForTimeout` deja el
+test afirmando sobre un corte que todavía no pasó. `lineDrag()` espera a que la
+mecánica **vuelva a IDLE**, que no depende de los fps.
+
+**Un trazo tiene que sobrar por los dos extremos.** El corte está acotado a la línea,
+así que un trazo que apenas cubre la fruta deja de cubrirla en cuanto los pedazos se
+mueven: la sandía queda entera con una muesca, que es correcto y hace el test
+inestable.
+
+**Para un segundo corte, congelá la física** (`__dev.pause()`): la cuchilla igual se
+anima y corta, pero los pedazos dejan de moverse y la geometría del segundo tajo es
+la misma en toda máquina.
+
 **La suite corre en serie** (`workers: 1`, `fullyParallel: false`). En paralelo,
 varias instancias WebGL por software se roban CPU, los fps colapsan y los barridos
 se quedan sin frames: la suite fallaba en paralelo y pasaba de a un test.
@@ -245,6 +286,11 @@ aserciones exactas van sobre `restRms` (posiciones de reposo, sin deformación).
 pantalla, el encuadre en HiDPI y el replay. Lo que sigue va igual a mano:
 
 - 60 fps en reposo abriendo `dist/index.html` con `file://`, y consola limpia.
+- **Que lo que se mira a ojo se mire de verdad.** La cruz de apuntado se shippeó
+  invisible porque un parche de CSS no encontró su ancla y no avisó, y la
+  verificación «a ojo» leyó la opacidad —que en un `<div>` sin estilo ya es 1— en vez
+  del tamaño. Si una comprobación manual no distingue el caso bueno del malo, no es
+  una comprobación.
 - **El trazo con la mano**: la cuchilla de línea se probó entera con mouse, nunca
   con una pinza real.
 - **El tracking con una mano real.** Nunca se validó contra hardware: todo el

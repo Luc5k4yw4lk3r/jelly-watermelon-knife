@@ -150,7 +150,8 @@ IDLE → AIMING → STRIKING → RETRACTING → IDLE
 | **AC19** | Un segundo trazo vuelve a partir, y un tercero también. | `[N]` «cada mitad se puede volver a cortar» · `[B]` «una mitad se puede volver a cortar» | R38 |
 | **AC20** | Con `MAX_PIECES` alcanzado el golpe se anima igual pero no corta. | `[N]` «el límite de piezas veta el corte» | R36 |
 | **AC21** | La cuchilla flota horizontal, sigue al puntero en XZ y proyecta sombra. | `[M]` | R18, R19 |
-| **AC22** | La línea guía, la cruz y el indicador de pinch se ven y se leen. | `[M]` | R15, R20, R23 |
+| **AC22** | La línea guía se ve y se lee. | `[M]` | R23 |
+| **AC32** | La cruz tiene **tamaño renderizado**, no solo opacidad, y sus dos barras también. | `[B]` «la cruz de apuntado se ve de verdad» | R15, R20 |
 | **AC23** | La alineación y el golpe se sienten como se pidieron: lerp de ~`ALIGN_MS`, golpe pesado con ease-in, retirada. | `[M]` | R24, R26, R37 |
 | **AC24** | Las mitades siguen tambaleando como gelatina y heredaron el movimiento que traían. | `[M]` | R33, R35 |
 | **AC25** | ~60 fps con ~20 piezas, y consola limpia abriendo `dist/index.html` con `file://`. | `[M]` | R40 |
@@ -261,6 +262,25 @@ Encontrado probando a mano, que es justamente para lo que están los criterios
 el puntero, porque el botón seguía apretado. En pantalla, `Esc` parecía no hacer
 nada. Después de cancelar hay que soltar, igual que al entrar a la mecánica.
 
+### 4.11 La cruz se shippeó invisible, y esta spec decía que no
+
+**Corrección.** En v0.4.1 el elemento `#cross` y el código que lo mueve entraron,
+pero su bloque de CSS **no**: el parche buscaba el comentario `/* toast */` y en el
+archivo dice `/* ---------- toast ---------- */`, así que el reemplazo no encontró
+nada y no avisó. El `<div>` quedó en el DOM, con sus clases y su `transform`, sin
+tamaño ni color.
+
+R15 y R20 figuraban acá como «✔ a ojo». No lo estaban. La comprobación que se hizo
+—leer `getComputedStyle(cross).opacity` y ver `1`— no probaba nada, porque 1 es el
+valor por defecto de un `<div>` sin estilo.
+
+Arreglado en v0.5.0, y con un test que mira el **tamaño renderizado** de la cruz y
+de sus dos barras, que es lo que un div vacío no puede fingir.
+
+La lección va más allá de este bug: una verificación «a ojo» solo cuenta si mira la
+propiedad que distingue el caso bueno del malo. Es la misma regla que ya estaba
+escrita para los tests automáticos.
+
 ### 4.10 El selector va en el HUD, no en el panel de tuneo
 
 El panel `D` está oculto por CSS debajo de 560 px de ancho. Un control de juego ahí
@@ -319,12 +339,12 @@ Se completa a medida que se implementa. `—` = todavía no.
 | R12 | AC4 | ✔ (los dos sabotajes dieron rojo) |
 | R13 | AC27 `[M]` | ⏳ sin webcam |
 | R14 | AC7 | ✔ |
-| R15 | AC22 `[M]` | ✔ a ojo: la cruz se cierra y se pone roja |
+| R15 | AC32 | ✔ corregido en v0.5.0 — ver §4.11 |
 | R16 | AC27 `[M]` | ⏳ sin webcam |
 | R17 | AC26 `[M]` | ✔ a ojo |
 | R18 | AC21 `[M]` | ✔ a ojo |
 | R19 | AC21 `[M]` | ✔ a ojo |
-| R20 | AC22 `[M]` | ✔ a ojo |
+| R20 | AC32 | ✔ corregido en v0.5.0 — ver §4.11 |
 | R21 | AC15 | ✔ |
 | R22 | AC15 | ✔ |
 | R23 | AC22 `[M]` | ✔ a ojo |
