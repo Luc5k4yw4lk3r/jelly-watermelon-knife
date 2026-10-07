@@ -1,6 +1,6 @@
 {
   "name": "jelly-watermelon-knife",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Una sandía de gelatina con física soft-body propia, cortable con un cuchillo 3D controlado por la mano a través de la webcam.",
   "license": "MIT",
   "type": "module",
