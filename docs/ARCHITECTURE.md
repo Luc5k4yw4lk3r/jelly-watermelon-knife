@@ -285,6 +285,61 @@ puntero son decenas de centímetros de mundo. Al entrar a la mecánica de línea
 cámara baja a ~35 grados y suelta el objetivo en cuanto lo alcanza, para no pelear
 con la órbita.
 
+## Medir la precisión de un corte
+
+Cuando un corte parte una pieza en dos, se mide qué proporción quedó de cada lado.
+Dos decisiones hacen que el número sirva.
+
+### Se mide en reposo, se clasifica en deformado
+
+`rest` no lo escribe nadie después de construirse, así que el volumen de cada celda
+es una constante que se calcula una vez. Medir sobre la malla deformada daría un
+valor distinto cada frame —la gelatina no deja de temblar— y no se podría puntuar
+nada.
+
+Pero el plano del corte vive en el mundo, sobre la fruta deformada. Entonces: las
+**distancias** al plano se toman sobre las posiciones actuales, y la **interpolación
+de los cortes** se aplica a las coordenadas de reposo. Clasificación de un lado,
+medida del otro.
+
+### Recortar tetraedros, no clasificar celdas
+
+La primera idea fue repartir cada celda según de qué lado caen sus 8 esquinas. Es
+simple y **no resuelve**: las esquinas están en posiciones discretas, así que al
+mover el plano el reparto salta de golpe cuando cruza una capa de partículas.
+
+| plano | por esquinas | recortando |
+|---|---|---|
+| centro | 100.0 | 100.0 |
+| +0.045 | 100.0 | 93.2 |
+| +0.090 | 78.4 | 86.5 |
+| +0.180 | 76.3 | 73.2 |
+
+Entre 100 y 78 no había nada. Recortando cada tetraedro de la celda contra el plano
+—casos de 1, 2 y 3 vértices— la curva es continua y se distinguen milímetros: con
+celdas de 0.182 de ancho, apuntar a 0.007 del centro todavía puntúa distinto de
+apuntar a 0.02.
+
+El control que lo valida es un cubo unitario cortado en `x = t`, que tiene que dar
+exactamente `1 − t`.
+
+### El tajo se lleva material, y la cuenta igual cierra
+
+Un corte mata el 9% de las celdas (17% en diagonal), porque una celda muere si pierde
+cualquiera de sus 12 aristas. Repartiendo cada celda entre las piezas de sus 8
+esquinas, la suma sobre todas las piezas sigue dando el total: no queda un agujero
+donde pasó la hoja. Y el reparto contra el plano no tiene ese problema en absoluto,
+porque el plano parte el volumen del padre sin destruir nada.
+
+### Identidad de los pedazos
+
+Para decir «el pedazo 3 se partió en el 7 y el 8» hace falta identidad, y la
+simulación no la tiene: los slots de `shapeMatching` se renumeran de cero en cada
+reconstrucción, en un orden que depende de qué resortes quedaron vivos. `pieces.js`
+lleva un union-find propio donde cada componente hereda el id de la vieja a la que
+pertenecía la mayoría de sus partículas; si una vieja queda repartida en dos, los
+hijos estrenan id.
+
 ## Tracking
 
 MediaPipe Tasks Vision con delegate GPU (con fallback a CPU si el driver lo
@@ -385,6 +440,46 @@ porque la red de seguridad del final de la animación cobraba el corte de todos
 modos. El test comprobaba que el corte ocurriera, que es lo que las dos versiones
 hacen; lo que las distingue es **cuándo**. Rehecho para medir eso —con la hoja
 todavía dentro de la fruta—, se pone rojo.
+
+### Releer un valor guardado no prueba que medir sea estable
+
+El primer test de «el puntaje no se mueve mientras la gelatina tiembla» leía el
+puntaje dos veces con una espera en el medio. Pasaba siempre —y **seguía pasando con
+la medición saboteada para usar la malla deformada**, porque lo que releía era un
+registro del historial, calculado una sola vez en el instante del corte. Un valor
+guardado no cambia aunque la medición que lo produjo fuera pésima.
+
+Medir de nuevo en vivo tampoco sirve: los pedazos se alejan del plano, así que el
+número cambia igual. Medido, deriva 2.9 puntos en cuatro segundos midiendo en reposo
+y 9.2 midiendo deformado — discrimina, pero por accidente y con un umbral frágil.
+
+Lo que prueba la propiedad es aplastar **un solo lado** sin mover nada a través del
+plano: la cantidad de material a cada lado no cambió, así que la medición no puede
+cambiar. Eso se hace en Node, donde las posiciones se escriben a mano, y el sabotaje
+lo pone en rojo.
+
+### Esperar una condición, no un tiempo
+
+`lineDrag()` esperaba 1600 ms después de soltar, para que la cuchilla bajara y
+volviera. Son ~600 ms de animación, pero se consumen **en frames**: con el navegador
+por software y la máquina cargada, esos 600 ms se van a varios segundos y el test
+afirma sobre un corte que todavía no pasó. Pasó a esperar a que la mecánica vuelva a
+IDLE, que no depende de los fps.
+
+El mismo error que el `waitForTimeout`, en otra forma: cualquier espera medida en
+tiempo de reloj sobre algo que avanza por frames es una apuesta.
+
+### Una verificación a ojo que no mira lo que distingue no es una verificación
+
+La cruz de apuntado se shippeó **invisible**: su bloque de CSS nunca entró, porque el
+parche buscaba un comentario que en el archivo está escrito distinto, y el reemplazo
+falló en silencio. El elemento estaba en el DOM, con sus clases y su `transform`, sin
+tamaño ni color.
+
+Y la spec la daba por verificada. La comprobación había sido leer
+`getComputedStyle(cross).opacity` y ver `1` —que es el valor por defecto de cualquier
+`<div>` sin estilo—, así que no distinguía el caso bueno del malo. El test que
+corresponde mira el **tamaño renderizado**, que un div vacío no puede fingir.
 
 ### Una métrica que depende de la máquina no es una aserción
 

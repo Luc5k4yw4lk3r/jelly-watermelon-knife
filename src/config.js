@@ -35,6 +35,34 @@ export const MAX_JUICE = 420;
    HUD la cambia en caliente. Los ids están en `mechanics/registry.js`. */
 export const DEFAULT_MECHANIC = 'handKnife';
 
+/* ── puntaje del corte ───────────────────────────────────────────────────── */
+
+/**
+ * Rangos por precisión, de mejor a peor. El último es el piso.
+ *
+ * Los umbrales son finos a propósito y **se puede** llegar a ellos: medido sobre
+ * la lattice, "Perfecto" es apuntar a menos de 0.007 unidades del centro, un 4%
+ * del ancho de una celda. Eso solo vale porque el reparto se mide recortando
+ * tetraedros; clasificando celdas enteras el puntaje salta de 100 a 78 y no hay
+ * nada en el medio (ver physics/volume.js).
+ */
+export const GRADES = [
+  { min: 99, name: 'Perfecto' },
+  { min: 97, name: 'Excelente' },
+  { min: 93, name: 'Bien' },
+  { min: 85, name: 'Regular' },
+  { min: -Infinity, name: 'Torcido' },
+];
+
+/** Modo práctica: muestra el reparto proyectado mientras se apunta. */
+export const PRACTICE_DEFAULT = false;
+/**
+ * Cuánto pueden discrepar las dos formas de medir el volumen de una pieza antes
+ * de avisar: el reparto contra el plano y la suma de celdas por esquinas. Son
+ * caminos independientes, así que si no coinciden hay un error de geometría.
+ */
+export const VOLUME_TOLERANCE = 0.01;
+
 /* MediaPipe se carga del CDN en runtime: su WASM y su modelo de 7.8 MB se bajan
    igual, así que empaquetar el wrapper no aportaría nada. */
 const MEDIAPIPE_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18';
@@ -87,6 +115,9 @@ export const tune = {
   CUT_MARGIN: 0.06,         // cuánto se extiende el corte más allá de A y de B
   SEP_IMPULSE: 0.0015,      // empujón que abre las mitades (ver physics/impulse.js)
   MAX_PIECES: 24,
+
+  // puntaje
+  LABEL_MS: 2500,           // cuánto quedan las etiquetas de porcentaje
 };
 
 /** Copia de los valores de fábrica, para que el panel pueda restaurarlos. */

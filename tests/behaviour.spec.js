@@ -359,13 +359,39 @@ async function lineDrag(page, from, to) {
     x0: from[0] * width, y0: from[1] * height,
     x1: to[0] * width,   y1: to[1] * height,
   });
-  await page.waitForTimeout(1600);              // golpe + retirada
+
+  /* Esperar a que la cuchilla **vuelva a su sitio**, no una cantidad fija de
+     milisegundos. El golpe y la retirada son unos 600 ms de animación, pero se
+     consumen en frames: con el navegador renderizando por software y la máquina
+     cargada se pueden ir a varios segundos, y un `waitForTimeout(1600)` deja el
+     test afirmando sobre un corte que todavía no pasó. Esto no depende de los
+     fps. */
+  await page.waitForFunction(
+    () => window.__dev.mechanicState.state === 'idle', null, { timeout: 60_000 });
 }
 
-/** Trazo que cruza la sandía entera, de lado a lado. */
-const ACROSS = [[0.25, 0.67], [0.77, 0.52]];
+/**
+ * Trazo que cruza la sandía entera, de lado a lado, **con margen**.
+ *
+ * El extremo A tiene que caer claramente afuera de la fruta. Con el trazo justo
+ * —A a una décima del borde— el corte queda a merced de cuántos frames alcance
+ * a tener el suavizado del puntero: en una corrida lenta A aterriza adentro, el
+ * tajo no llega al borde y la sandía queda entera con una muesca. Eso es
+ * correcto (el corte está acotado a la línea) y hace el test inestable.
+ */
+const ACROSS = [[0.16, 0.72], [0.86, 0.46]];
 
 const mechanic = (page) => page.evaluate(() => window.__dev.mechanic);
+/**
+ * Congela la simulación sin impedir que se corte.
+ *
+ * Un segundo tajo sobre una mitad depende de dónde quedó esa mitad, y las
+ * mitades se siguen moviendo: cuánto se desplazaron depende de cuántos frames
+ * cayeron, o sea de la carga de la máquina. Con la física quieta, la geometría
+ * del segundo corte es la misma siempre. El golpe de la cuchilla igual se anima,
+ * porque la mecánica se actualiza antes del congelado.
+ */
+const freeze = (page) => page.evaluate(() => window.__dev.pause());
 const lastCut = (page) => page.evaluate(() => window.__dev.mechanicState.lastCut);
 
 test('arranca en la mecánica por defecto, y ?mech elige otra', async ({ page }) => {
@@ -427,6 +453,7 @@ test('una mitad se puede volver a cortar', async ({ page }) => {
 
   await lineDrag(page, ...ACROSS);
   expect(await pieces(page)).toBe('2');
+  await freeze(page);
 
   /* Segundo trazo, cruzado con el primero y **de borde a borde**. Después del
      primer corte las mitades se abren y se acomodan: un trazo que apenas cubría
@@ -439,4 +466,219 @@ test('una mitad se puede volver a cortar', async ({ page }) => {
   expect((await cuts(page)).events).toBe(2);
   expect((await lastCut(page)).severed).toBeGreaterThan(0);
   expect(errs).toEqual([]);
+});
+
+/* ── precisión del corte ─────────────────────────────────────────────────── */
+
+const score = (page) => page.evaluate(() => window.__dev.score);
+/** Trazo con el puntero que pasa cerca del centro de la sandía. */
+const CENTRADO = [[0.40, 0.86], [0.60, 0.18]];
+
+/**
+ * Corta por una línea en coordenadas de **mundo**, sin gesto.
+ *
+ * Dibujar un trazo se lleva decenas de frames, y a los 10 fps que da el
+ * navegador por software eso son segundos por corte: tres cortes en un test lo
+ * dejan al borde de que el navegador se caiga. Lo que el gesto prueba —que el
+ * puntero se traduce bien a una línea y que la cuchilla baja— lo cubre el test
+ * de abajo, una vez. El resto del puntaje se prueba con la línea puesta a mano,
+ * que además es exacta: se puede afirmar «por el centro da 50/50».
+ */
+const cutLine = (page, ax, az, bx, bz) =>
+  page.evaluate(([a, b, c, d]) => window.__dev.cutLine(a, b, c, d), [ax, az, bx, bz]);
+
+test('un corte con el gesto puntúa, y el puntaje describe el reparto', async ({ page }) => {
+  const errs = problems(page);
+  await bootMech(page, 'lineKnife');
+
+  await lineDrag(page, ...CENTRADO);
+
+  const { stats, last } = await score(page);
+  expect(stats.count).toBe(1);
+  expect(last).not.toBe(null);
+
+  // los porcentajes suman 100: el material del tajo no se pierde de la cuenta
+  expect(last.split[0] + last.split[1]).toBeCloseTo(100, 6);
+  // y la precisión es coherente con ellos
+  expect(last.precision).toBeCloseTo(100 - Math.abs(last.split[0] - last.split[1]), 1);
+  // el padre es la sandía entera y los hijos son dos piezas nuevas
+  expect(last.childIds).toHaveLength(2);
+  expect(last.childIds).not.toContain(last.parentPieceId);
+  expect(errs).toEqual([]);
+});
+
+test('por el centro da mitad y mitad; por el borde, claramente desparejo', async ({ page }) => {
+  const errs = problems(page);
+  await bootMech(page, 'lineKnife');
+
+  await cutLine(page, 0, -1.6, 0, 1.6);
+  const centro = (await score(page)).last;
+  expect(centro.split[0]).toBeCloseTo(50, 0);
+  expect(centro.precision).toBeGreaterThan(99);
+  expect(centro.grade).toBe('Perfecto');
+
+  await page.locator('#btnReset').click();
+  await page.waitForTimeout(400);
+
+  await cutLine(page, 0.45, -1.6, 0.45, 1.6);
+  const borde = (await score(page)).last;
+  expect(Math.max(...borde.split)).toBeGreaterThan(65);
+  expect(borde.precision).toBeLessThan(70);
+  expect(errs).toEqual([]);
+});
+
+test('el puntaje de un corte no cambia después', async ({ page }) => {
+  const errs = problems(page);
+  await bootMech(page, 'lineKnife');
+  await cutLine(page, 0.1, -1.6, 0.1, 1.6);
+
+  /* El puntaje se mide una sola vez, en el instante del corte, y queda. Los
+     pedazos siguen moviéndose —se abren y se caen— pero el número no.
+     Que ese número además no dependa de **cuán deformada** estaba la gelatina en
+     ese instante es la otra mitad del asunto, y se prueba en Node, donde se puede
+     aplastar un lado a voluntad: «aplastar un lado no cambia el reparto medido».
+     Acá no se puede: una remedición en vivo cambia igual, porque los pedazos se
+     alejaron del plano. */
+  const first = (await score(page)).last;
+  await page.waitForTimeout(900);
+  const then = (await score(page)).last;
+  await page.waitForTimeout(900);
+  const later = (await score(page)).last;
+
+  expect(then.precision).toBe(first.precision);
+  expect(later.precision).toBe(first.precision);
+  expect(later.split).toEqual(first.split);
+  expect(later.volumes).toEqual(first.volumes);
+
+  /* Y los pedazos sí se movieron: el número quieto no es porque no pase nada.
+     Es solo prueba de vida, no una afirmación sobre cuánto: medir de nuevo es
+     determinista, así que sin movimiento daría exactamente lo mismo. Cuánto
+     derivan depende de cuántos frames cayeron. */
+  const moved = await page.evaluate(() => window.__dev.splitAt(0.1, -1.6, 0.1, 1.6));
+  expect(Math.abs(moved[0] - first.split[0])).toBeGreaterThan(0.005);
+  expect(errs).toEqual([]);
+});
+
+test('recortar una mitad se puntúa contra esa mitad', async ({ page }) => {
+  const errs = problems(page);
+  await bootMech(page, 'lineKnife');
+
+  await cutLine(page, 0, -1.6, 0, 1.6);              // en dos mitades
+  /* La segunda línea arranca en x = 0.1 y no en −1.6: así su extensión cubre la
+     mitad derecha y nada más. Una línea de borde a borde cruzaría las dos y
+     puntuaría dos cortes, no uno. */
+  await cutLine(page, 0.1, 0, 1.6, 0);
+
+  const { last, stats } = await score(page);
+  expect(stats.count).toBe(2);
+  /* Si el puntaje fuera contra la sandía entera, partir una mitad por el medio
+     daría 25/75. Contra su propia mitad, da 50/50. */
+  expect(last.split[0]).toBeCloseTo(50, 0);
+  expect(last.precision).toBeGreaterThan(95);
+  expect(errs).toEqual([]);
+});
+
+test('las estadísticas acumulan y el botón las reinicia', async ({ page }) => {
+  await bootMech(page, 'lineKnife');
+
+  await cutLine(page, 0, -1.6, 0, 1.6);              // perfecto
+  await cutLine(page, 0.1, 0.5, 1.6, 0.5);           // torcido, y solo sobre una mitad
+
+  let st = (await score(page)).stats;
+  expect(st.count).toBe(2);
+  expect(st.best).toBeGreaterThan(st.last);          // el mejor no es el último
+  expect(st.avg).toBeLessThan(st.best);
+  expect(await page.locator('#statLast').innerText()).not.toBe('—');
+
+  await page.locator('#btnStatsReset').click();
+  st = (await score(page)).stats;
+  expect(st.count).toBe(0);
+  expect(await page.locator('#statLast').innerText()).toBe('—');
+});
+
+test('un golpe que parte dos piezas puntúa las dos', async ({ page }) => {
+  await bootMech(page, 'lineKnife');
+  await cutLine(page, 0, -1.6, 0, 1.6);              // dos mitades
+  const antes = (await score(page)).stats.count;
+
+  // una línea perpendicular cruza las dos: dos splits en un solo golpe
+  await cutLine(page, -1.6, 0, 1.6, 0);
+  const st = (await score(page)).stats;
+  expect(st.count).toBe(antes + 2);
+});
+
+test('el puntaje solo aparece donde el corte es un plano', async ({ page }) => {
+  await boot(page);                       // tajo libre
+  await expect(page.locator('#statsChip')).toBeHidden();
+  await expect(page.locator('#practiceChip')).toBeHidden();
+
+  await page.selectOption('#mech', 'lineKnife');
+  await expect(page.locator('#statsChip')).toBeVisible();
+  await expect(page.locator('#practiceChip')).toBeVisible();
+});
+
+test('el modo práctica muestra el reparto antes de cortar', async ({ page }) => {
+  const errs = problems(page);
+  await bootMech(page, 'lineKnife');
+  await page.locator('#practice').check();
+
+  const { width, height } = page.viewportSize();
+  const shown = await page.evaluate(async (o) => {
+    const cv = document.getElementById('gl');
+    const raf = () => new Promise((r) => requestAnimationFrame(() => r()));
+    const move = (x, y) => dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, bubbles: true }));
+
+    move(o.x0, o.y0);
+    for (let i = 0; i < 25; i++) await raf();
+    cv.dispatchEvent(new PointerEvent('pointerdown', {
+      clientX: o.x0, clientY: o.y0, button: 0, pointerId: 1, pointerType: 'mouse', bubbles: true,
+    }));
+    for (let i = 1; i <= 14; i++) {
+      move(o.x0 + (o.x1 - o.x0) * i / 14, o.y0 + (o.y1 - o.y0) * i / 14);
+      await raf();
+    }
+    // el recálculo va a 10 Hz: hay que darle una ventana, contada en frames
+    for (let i = 0; i < 12; i++) await raf();
+    const mid = document.getElementById('practiceSplit').textContent;
+    dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, bubbles: true }));
+    return mid;
+  }, {
+    x0: CENTRADO[0][0] * width, y0: CENTRADO[0][1] * height,
+    x1: CENTRADO[1][0] * width, y1: CENTRADO[1][1] * height,
+  });
+  await page.waitForFunction(
+    () => window.__dev.mechanicState.state === 'idle', null, { timeout: 60_000 });
+
+  // durante el apuntado mostró un reparto, no el guion
+  expect(shown).toMatch(/^\d+\/\d+$/);
+  const [a, b] = shown.split('/').map(Number);
+  expect(a + b).toBeGreaterThan(98);
+  expect(a + b).toBeLessThan(102);
+
+  // y al cortar, el puntaje real se parece a lo que anticipó
+  const last = (await score(page)).last;
+  expect(Math.abs(Math.max(a, b) - Math.max(...last.split))).toBeLessThan(6);
+  expect(errs).toEqual([]);
+});
+
+test('la cruz de apuntado se ve de verdad', async ({ page }) => {
+  /* No alcanza con mirar la opacidad: sin CSS un div vacío **también** reporta
+     opacidad 1, que es el default. Eso fue exactamente lo que dejó pasar que la
+     cruz se shippeara invisible. Lo que hay que mirar es el tamaño. */
+  await bootMech(page, 'lineKnife');
+
+  const box = await page.evaluate(() => {
+    const c = document.getElementById('cross');
+    const r = c.getBoundingClientRect();
+    const bars = [...c.querySelectorAll('i')].map((i) => {
+      const b = i.getBoundingClientRect();
+      return { w: b.width, h: b.height };
+    });
+    return { w: r.width, h: r.height, bars };
+  });
+
+  expect(box.w).toBeGreaterThan(8);
+  expect(box.h).toBeGreaterThan(8);
+  expect(box.bars).toHaveLength(2);
+  for (const b of box.bars) expect(b.w * b.h).toBeGreaterThan(0);
 });

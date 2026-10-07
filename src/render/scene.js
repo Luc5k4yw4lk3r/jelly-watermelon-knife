@@ -205,6 +205,27 @@ export function createScene(canvas) {
     return out;
   }
 
+  const _w2s = new THREE.Vector3();
+  /**
+   * Punto del mundo → píxeles **CSS** de la pantalla.
+   *
+   * CSS, no píxeles del buffer: con `devicePixelRatio` 2 el buffer mide el doble
+   * que la caja del canvas, y además `adaptResolution` le cambia el tamaño sola
+   * a mitad de sesión cuando bajan los fps. Un overlay de DOM se posiciona en
+   * píxeles CSS, así que leer `canvas.width` pondría todo al doble de lejos.
+   *
+   * `out.behind` queda en true cuando el punto está detrás de la cámara: ahí la
+   * proyección devuelve coordenadas espejadas y lo que corresponde es esconder
+   * lo que se estuviera anclando.
+   */
+  function worldToScreen(x, y, z, out) {
+    _w2s.set(x, y, z).project(camera);
+    out.x = (_w2s.x * 0.5 + 0.5) * innerWidth;
+    out.y = (0.5 - _w2s.y * 0.5) * innerHeight;
+    out.behind = _w2s.z > 1;
+    return out;
+  }
+
   /**
    * Ancho del frustum de sombra del key light.
    *
@@ -236,6 +257,6 @@ export function createScene(canvas) {
     renderer, scene, camera, knifeParallax, basis, orbit, target: TARGET,
     get polar() { return polar; },
     resize, onResize, adaptResolution, setShadowExtent,
-    ndcToPlane, planeToWorld, ndcToGround, render,
+    ndcToPlane, planeToWorld, ndcToGround, worldToScreen, render,
   };
 }

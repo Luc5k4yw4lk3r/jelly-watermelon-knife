@@ -8,7 +8,8 @@ Dos formas de cortar, a elección:
 - **Tajo libre** — el cuchillo sigue tu mano todo el tiempo. *Mano lenta empuja la
   gelatina; tajo rápido la corta de verdad.* Es un gesto de destreza.
 - **Cuchillo** — dibujás una línea sobre la fruta y una cuchilla de carnicero baja
-  y parte por ahí. Sin umbral de velocidad: corta exactamente donde apuntaste.
+  y parte por ahí. Sin umbral de velocidad: corta exactamente donde apuntaste, y te
+  dice **qué tan parejo** te salió.
 
 En las dos, el corte rompe resortes y separa pedazos que siguen siendo gelatina,
 tiemblan y caen por separado.
@@ -48,6 +49,12 @@ pedazos que ya cortaste se conservan.
 | Arrastrar y soltar | Dibuja la línea y la cuchilla baja a partir por ahí |
 | Pinza de pulgar e índice | Lo mismo, con la mano |
 | Línea muy corta, o `Esc` | Cancela, la cuchilla vuelve arriba |
+| *Práctica* | Muestra el reparto que daría la línea, antes de cortar |
+
+Cada corte se puntúa por lo parejo que quedó: el porcentaje sobre cada mitad, la
+precisión y el rango —de *Perfecto* a *Torcido*—, y el HUD lleva el último, el mejor
+y el promedio de la sesión. El puntaje es **relativo a la pieza que cortaste**, así
+que partir una mitad por su propio centro también puede dar 100.
 
 **En las dos**
 
@@ -81,6 +88,9 @@ Dos banderas de URL, solo para desarrollo:
 | `?replay=<url>` | reproduce una sesión de landmarks grabada en lugar de usar la cámara |
 | `?mech=<id>` | arranca en una mecánica: `handKnife` o `lineKnife` |
 
+`window.__dev.score` trae las estadísticas y el último corte medido, y
+`window.__dev.pieceIds` los ids estables de las piezas vivas.
+
 Para grabar una sesión: abrí el panel de tuneo con `D`, activá la cámara y tocá
 **Grabar landmarks**. Baja un JSON que sirve tanto para los tests como para
 reproducir a mano algo que pasó una sola vez.
@@ -95,7 +105,8 @@ src/
 ├── config.js        constantes estructurales + `tune` ajustable en vivo
 ├── main.js          cableado y frame loop
 ├── mechanics/       las dos formas de cortar, detrás de una interfaz común
-├── physics/         lattice, solver, shape matching, corte, topología, impulsos
+├── physics/         lattice, solver, shape matching, corte, topología, volumen
+├── score/           medición del reparto, puntaje e historial
 ├── render/          escena, malla de la gelatina, shaders, cuchillos, jugo
 ├── input/           tracking de mano, One Euro, mouse, puntero, órbita, pose
 ├── audio/           squish sintetizado con WebAudio
@@ -112,6 +123,9 @@ La versión corta:
   no propaga rigidez a través de 10 capas y la sandía se despanzurra.
 - **Corte topológico**: se eliminan los resortes que cruzan el área barrida por la
   hoja. Los pedazos resultantes son cuerpos independientes de verdad.
+- **Volumen exacto** por descomposición de cada celda en tetraedros, medido sobre la
+  forma de reposo para que el número no tiemble con la gelatina, y recortado contra
+  el plano del corte para que distinga milímetros en vez de celdas enteras.
 - **Corte en espacio de cámara**, así que la órbita no lo rompe y se puede cortar
   en profundidad. La cuchilla de línea reusa el mismo cutter con una base
   sintética: derecha sobre la línea, arriba el +Y del mundo, y el eje que el

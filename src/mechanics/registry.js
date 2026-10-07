@@ -32,6 +32,9 @@ export const MECHANICS = [
     id: 'lineKnife',
     label: 'Cuchillo',
     create: createLineKnife,
+    /* Corta por un plano, así que el reparto se puede medir y puntuar. El tajo
+       libre barre un cuadrilátero: ahí un split no está definido. */
+    scores: true,
     hint: '<b>Arrastrá</b> una línea sobre la sandía y <em>soltá</em> &nbsp;·&nbsp; con la mano, <b>pinza</b> de pulgar e índice &nbsp;·&nbsp; <b>Esc</b> cancela &nbsp;·&nbsp; <b>flechas</b> o botón derecho para girar',
   },
 ];

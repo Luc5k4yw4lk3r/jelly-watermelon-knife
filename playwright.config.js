@@ -8,6 +8,12 @@ export default defineConfig({
      sí, los fps colapsan y los barridos se quedan sin frames: los tests fallan
      en paralelo y pasan de a uno. */
   fullyParallel: false,
+  /* El navegador renderiza por software a unos 10 fps, y un test que dibuja una
+     línea con el mouse necesita decenas de frames: entre el suavizado del
+     puntero, el golpe y la retirada, un solo trazo se lleva siete segundos. Los
+     30 s de fábrica alcanzaban cuando los gestos eran barridos cortos; con dos
+     trazos en el mismo test, no. No es que se cuelguen: tardan. */
+  timeout: 90_000,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,

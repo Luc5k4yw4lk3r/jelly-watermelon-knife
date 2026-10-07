@@ -171,6 +171,75 @@
   }
   .err.on{display:block}
 
+  /* ---------- cruz de apuntado ---------- */
+  /* Es el cursor de la mecánica de línea: el del sistema está oculto por
+     body{cursor:none}, así que sin esto no hay nada que mirar. */
+  #cross{
+    position:fixed;left:0;top:0;z-index:18;
+    width:26px;height:26px;pointer-events:none;
+    opacity:0;transition:opacity .15s ease;
+  }
+  #cross.on{opacity:.85}
+  #cross i{position:absolute;background:var(--ink);border-radius:1px;transition:all .12s ease}
+  #cross i:nth-child(1){left:50%;top:3px;width:1.5px;height:20px;margin-left:-.75px}
+  #cross i:nth-child(2){top:50%;left:3px;height:1.5px;width:20px;margin-top:-.75px}
+  /* al apretar se cierra y toma el color del corte */
+  #cross.pinch i{background:var(--accent)}
+  #cross.pinch i:nth-child(1){top:8px;height:10px}
+  #cross.pinch i:nth-child(2){left:8px;width:10px}
+
+  /* ---------- puntaje del corte ---------- */
+  #cutLabels{position:fixed;inset:0;z-index:22;pointer-events:none}
+  /* Píldora y no texto suelto: el porcentaje cae sobre la pulpa, que es roja,
+     y el color del rango también lo es cuando el corte salió torcido. */
+  .cutLabel{
+    position:fixed;left:0;top:0;
+    font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;
+    padding:4px 10px;border-radius:999px;
+    background:rgba(255,255,255,.92);border:1px solid var(--stroke);
+    box-shadow:0 6px 18px -10px rgba(27,42,33,.6);
+    opacity:0;transition:opacity .2s ease;
+  }
+  .cutLabel.on{opacity:1}
+  #cutBadge{
+    position:fixed;left:50%;top:70px;transform:translate(-50%,-10px);
+    z-index:50;opacity:0;pointer-events:none;
+    display:flex;align-items:baseline;gap:9px;
+    background:var(--panel);border:1px solid var(--stroke);
+    border-left:4px solid var(--tint,var(--accent2));
+    padding:8px 16px;border-radius:14px;
+    backdrop-filter:blur(10px) saturate(1.2);-webkit-backdrop-filter:blur(10px) saturate(1.2);
+    box-shadow:0 14px 30px -16px rgba(27,42,33,.5);
+    transition:opacity .25s ease, transform .25s ease;
+  }
+  #cutBadge.on{opacity:1;transform:translate(-50%,0)}
+  #cutBadge b{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--tint,var(--ink))}
+  #cutBadge span{font-size:12px;font-weight:700;color:var(--ink-soft);letter-spacing:.02em}
+
+  /* botón diminuto dentro de un chip */
+  .chip .mini{
+    all:unset;cursor:pointer;
+    width:18px;height:18px;border-radius:50%;
+    display:grid;place-items:center;
+    color:var(--ink-soft);font-size:11px;
+  }
+  .chip .mini:hover{background:rgba(27,42,33,.08);color:var(--ink)}
+  /* un checkbox nativo tampoco hereda nada del chip */
+  .chip input[type=checkbox]{
+    appearance:none;-webkit-appearance:none;margin:0;
+    width:30px;height:17px;border-radius:999px;cursor:pointer;
+    background:#c8d0c6;border:1px solid var(--stroke);
+    position:relative;transition:background .15s ease;
+  }
+  .chip input[type=checkbox]::after{
+    content:'';position:absolute;top:1px;left:1px;
+    width:13px;height:13px;border-radius:50%;background:#fff;
+    transition:transform .15s ease;
+  }
+  .chip input[type=checkbox]:checked{background:var(--accent2)}
+  .chip input[type=checkbox]:checked::after{transform:translateX(13px)}
+  .chip input[type=checkbox]:focus-visible{outline:2px solid var(--accent2);outline-offset:3px}
+
   /* ---------- toast ---------- */
   #toast{
     position:fixed;left:50%;top:22px;transform:translate(-50%,-14px);
@@ -248,6 +317,8 @@
   <div class="chip"><span class="muted">Pedazos</span><b id="pieces">1</b></div>
   <label class="chip" id="mechChip" hidden><span class="muted">Mecánica</span><select id="mech"></select></label>
   <div class="chip" id="srcChip"><span class="dot off" id="srcDot"></span><span id="srcLabel">Mouse</span></div>
+  <label class="chip" id="practiceChip" hidden><input type="checkbox" id="practice"><span class="muted">Práctica</span><b id="practiceSplit">—</b></label>
+  <div class="chip" id="statsChip" hidden><span class="muted">Precisión</span><b id="statLast">—</b><span class="muted">mejor</span><b id="statBest">—</b><span class="muted">prom</span><b id="statAvg">—</b><button class="mini" id="btnStatsReset" title="Reiniciar estadísticas">↺</button></div>
 </div>
 
 <div id="fps">-- FPS</div>
@@ -263,6 +334,9 @@
 </div>
 
 <div id="cross"><i></i><i></i></div>
+
+<div id="cutLabels"></div>
+<div id="cutBadge"></div>
 
 <div id="toast"></div>
 
