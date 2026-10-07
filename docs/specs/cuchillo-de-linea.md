@@ -255,13 +255,13 @@ Se completa a medida que se implementa. `—` = todavía no.
 
 | Requisito | Criterios | Estado |
 |---|---|---|
-| R1 | AC1 | — |
+| R1 | AC1 | ✔ suite completa en verde tras el traslado |
 | R2 | AC2 | — |
 | R3 | AC3 | — |
 | R4 | AC3 | — |
 | R5 | AC3 | — |
 | R6 | AC2 | — |
-| R7 | estructural | — |
+| R7 | estructural | ✔ las mecánicas reciben el mismo `io` |
 | R8 | AC6, AC15 | — |
 | R9 | AC15, AC16 | — |
 | R10 | AC6 | — |

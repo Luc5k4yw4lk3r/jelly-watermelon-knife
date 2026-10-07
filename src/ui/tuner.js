@@ -1,4 +1,5 @@
 import { tune, tuneDefaults } from '../config.js';
+import { inControl } from './focus.js';
 
 /**
  * Panel de tuneo en vivo, con `D`.
@@ -134,6 +135,7 @@ export function createTuner({ onStiffnessChange, recorder, hud }) {
   function toggle() { panel.hidden = !panel.hidden; }
 
   addEventListener('keydown', (e) => {
+    if (inControl(e)) return;
     if (e.key === 'd' || e.key === 'D') toggle();
   });
 

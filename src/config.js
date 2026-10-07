@@ -31,6 +31,10 @@ export const PLANE_Z    = 0;                // plano donde vive el corte
 
 export const MAX_JUICE = 420;
 
+/* Mecánica con la que arranca el juego. `?mech=<id>` la pisa, y el selector del
+   HUD la cambia en caliente. Los ids están en `mechanics/registry.js`. */
+export const DEFAULT_MECHANIC = 'handKnife';
+
 /* MediaPipe se carga del CDN en runtime: su WASM y su modelo de 7.8 MB se bajan
    igual, así que empaquetar el wrapper no aportaría nada. */
 const MEDIAPIPE_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18';

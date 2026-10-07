@@ -17,7 +17,10 @@ export const DEV = new URLSearchParams(location.search).has('dev');
  */
 export const devState = { paused: false, juiceVisible: null };
 
-export function installDevtools({ lat, topo, jelly, juice, blades, replay, getPieces, getPhysMs, getCuts }) {
+export function installDevtools({
+  lat, topo, jelly, juice, replay,
+  getBlades, getMechanic, getMechanicState, getPieces, getPhysMs, getCuts,
+}) {
   if (!DEV) return;
 
   /**
@@ -110,15 +113,19 @@ export function installDevtools({ lat, topo, jelly, juice, blades, replay, getPi
        hace flaky la aserción sobre el contador de pedazos. */
     get cuts() { return getCuts(); },
     get replay() { return replay ? { total: replay.total, done: replay.done, at: replay.at } : null; },
-    /** Estado de las hojas: lo primero que hay que mirar si un tajo no corta. */
+    /** Estado de las hojas: lo primero que hay que mirar si un tajo no corta.
+        Depende de la mecánica activa, y hay mecánicas que no tienen hojas. */
     get blades() {
-      return blades.map((b) => ({
+      return getBlades().map((b) => ({
         active: b.active,
         opacity: +b.opacity.toFixed(2),
         speed: +b.speed.toFixed(2),
         rot: +b.rot.toFixed(3),
       }));
     },
+    get mechanic() { return getMechanic(); },
+    /** Lo que la mecánica activa quiera exponer; null si no expone nada. */
+    get mechanicState() { return getMechanicState(); },
     get juiceCount() { return juice.count; },
     get physMs() { return +getPhysMs().toFixed(2); },
     get visibleFaces() { return topo.visCount; },
