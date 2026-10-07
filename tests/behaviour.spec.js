@@ -297,10 +297,14 @@ test('la planaridad de la cara de corte da la línea base', async ({ page }) => 
   expect(m.restRms).toBeGreaterThan(0.06);
   expect(m.restRms).toBeLessThan(0.11);
 
-  /* Sobre la malla tal como se dibuja el número incluye el bamboleo de la
-     gelatina y varía entre 0.2 y 0.4, así que acá solo se comprueba que la
-     métrica esté viva. Para comparar antes/después sirve `restRms`. */
-  expect(m.rms).toBeGreaterThan(0.05);
+  /* Sobre la malla tal como se dibuja, el número incluye el bamboleo de la
+     gelatina, y **cuánto bamboleo queda depende del framerate**: la espera de
+     después del corte es de tiempo real, así que a 60 fps se simulan ~70 pasos y
+     a 5 fps unos pocos. Medido, eso da 0.03 en las corridas rápidas y 0.3 en las
+     lentas: un orden de magnitud, por la máquina y no por el código. Acá solo se
+     comprueba que la métrica esté viva; para comparar antes y después está
+     `restRms`, que se mide sobre posiciones de reposo y sale idéntico siempre. */
+  expect(m.rms).toBeGreaterThan(0);
 });
 
 test('el replay de landmarks mueve el cuchillo y corta', async ({ page }) => {
