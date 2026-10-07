@@ -95,12 +95,65 @@ colorea por radio: rojo con semillas, anillo de blanco, corteza verde.
 Las caras visibles se empaquetan desde el slot 0 para que cada frame solo haya que
 subir ese prefijo del buffer.
 
+### El corte vive en espacio de cámara
+
+El prisma del corte **no** va por el eje Z del mundo: las partículas se proyectan
+a la base de la cámara (derecha / arriba / profundidad) y el prisma se extiende
+sobre el eje de visión. El test 2D del swept quad es idéntico; lo único que
+cambia es la base.
+
+Esto es lo que permite orbitar sin que el plano de corte deje de coincidir con lo
+que se ve, y de paso habilita cortar un pedazo en profundidad.
+
 ### Suavizado de la cara de corte
 
 Un corte diagonal sobre una rejilla alineada a los ejes siempre queda en escalera.
 Un pase Laplaciano sobre las partículas —**solo para render**, y nunca a través de
 un resorte cortado, para no volver a pegar los pedazos— redondea la sierra sin
 tocar la simulación.
+
+### Dos intentos de aplanar la cara de corte, los dos medidos y descartados
+
+La silueta escalonada del corte molesta. Se probaron dos enfoques y **los dos
+empeoraron** la métrica, así que no están en el código. Vale dejarlos anotados
+para no repetirlos.
+
+La métrica: alineación de las normales de las caras de pulpa visibles contra su
+promedio (1.0 = cara perfectamente plana).
+
+**1. Proyectar las partículas del borde sobre el plano de la hoja.** Al cortar se
+conoce el plano exacto, así que se proyectaban sobre él las partículas que
+perdieron un resorte, grabando la corrección también en `rest` para que el shape
+matching no la deshiciera.
+
+| Rango de aplanado | Alineación media |
+|---|---|
+| 0 (control) | 0.56 |
+| 0.12 | 0.545 |
+| 0.20 | 0.385 |
+
+Monótonamente peor. La razón: la escalera la produce **qué celdas sobreviven**,
+no dónde están las partículas. Las caras expuestas son caras de celda, y mover
+solo las partículas tocadas mientras sus vecinas quedan quietas **inclina** esas
+caras en direcciones inconsistentes: agrega ruido en vez de sacar escalones.
+
+Además tenía un modo de falla propio: un tajo dura ~18 frames y la misma
+partícula se re-aplanaba contra una recta distinta en cada uno, acumulando deriva
+en `rest` hasta destruir la forma objetivo del shape matching. La sandía se
+desintegraba en 8 pedazos donde el control daba 2.
+
+**2. Suavizado Laplaciano a lo largo de la propia superficie de corte.** Pases
+extra de suavizado solo entre partículas de la cara, sin tocar el interior.
+Resultado errático y no monótono (0.93 control → 0.12 con 2 pases → 0.55 con 3 →
+0.86 con 5): con peso alto la superficie se encoge sobre sí misma y las normales
+se vuelven basura.
+
+**Lo que dejó la medición:** el control ya puntúa **0.926** de alineación, con el
+82% de las caras dentro de 30°. Las normales de la cara de corte ya están bien;
+lo que se ve feo es la **silueta**, que es geometría, no sombreado. Arreglarla de
+verdad requiere geometría sub-celda —partir las celdas en el plano de corte y
+generar polígonos nuevos— o una lattice bastante más fina. Cualquier otra cosa es
+mover ruido de lugar.
 
 ## Render
 
@@ -144,6 +197,10 @@ el retardo que un promedio móvil agregaría en los movimientos rápidos.
 La hoja se posiciona con el punto medio muñeca–nudillo del índice y se orienta con
 ese mismo vector. La X se espeja para que mover la mano a la derecha mueva el
 cuchillo a la derecha.
+
+Se trackean **dos manos**, cada una con su propio banco de filtros. Los slots se
+asignan por la *handedness* que reporta MediaPipe, no por el orden del array: ese
+orden no es estable entre frames y los cuchillos terminan intercambiándose solos.
 
 ## Performance
 
