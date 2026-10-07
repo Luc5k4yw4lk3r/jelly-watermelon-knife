@@ -93,7 +93,8 @@ La versión corta:
   se puede probar sin hardware y reproducir sesiones grabadas.
 
 La versión larga, con los porqués y los bugs que costaron encontrar, está en
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Lo que falta, con lo que ya se sabe
+de cada cosa, en [`docs/BACKLOG.md`](docs/BACKLOG.md).
 
 ## Licencia
 

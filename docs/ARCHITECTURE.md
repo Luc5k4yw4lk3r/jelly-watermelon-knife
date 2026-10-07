@@ -180,7 +180,20 @@ dibujos no nadan sobre la superficie cuando tiembla.
 Las normales se acumulan **por tipo de cara** (corteza / pulpa) para que el borde
 entre la cáscara y el corte quede nítido en vez de redondearse.
 
-## Dos bugs de render que valen la pena recordar
+## Bugs que vale la pena recordar
+
+**Un `dt` recortado para un subsistema corrompe a cualquier otro que lo lea.** El
+frame loop recorta `dt` a 0.1 s para que la física no explote después de un stall,
+y la velocidad de la hoja se calculaba con ese valor recortado. En una máquina a
+5 fps un movimiento de 2 u/s se medía como 4 y disparaba cortes espurios: **mover
+la mano despacio cortaba**. Solo se manifiesta a fps bajos, que es justo donde más
+molesta. La velocidad de entrada ahora va contra el tiempo real del frame
+(`speedDt` en `input/blade.js`); el `dt` recortado se usa solo para suavizado y
+para la física.
+
+Lo transferible: un clamp puesto por la estabilidad de un subsistema se vuelve
+mentira para todos los demás que lean esa variable. Si un número se recorta por una
+razón, hay que preguntarse quién más lo está leyendo.
 
 **El `<canvas>` es un elemento reemplazado.** `position: fixed; inset: 0` **no** lo
 estira: toma su tamaño intrínseco, que es el del drawing buffer. Con
@@ -251,6 +264,45 @@ avanza por pasos fijos acumulados contra tiempo real, así que cuántos substeps
 caen entre dos frames depende de la máquina y el corte varía unos pocos resortes.
 Por eso las aserciones exactas van sobre `restRms` (posiciones de reposo, sin
 deformación) y no sobre números que dependan del bamboleo.
+
+### El framerate bajo del entorno de test es un detector, no un estorbo
+
+El navegador de los tests renderiza por software a pocos fps. La primera reacción
+fue pelearlo; la correcta fue darse cuenta de que **expone bugs que a 60 fps no se
+ven**. El del `dt` recortado apareció ahí, en el primer run completo de la suite, y
+afecta a cualquier usuario con una máquina lenta.
+
+## Cómo se decide si una mejora de calidad sirve
+
+En este proyecto se mergearon cero mejoras de calidad sin número, y se revirtieron
+dos que parecían obviamente buenas. El procedimiento que quedó:
+
+**1. Definir la métrica antes de tocar nada, y elegir la correcta.** La alineación
+de normales parecía la métrica natural para la cara de corte y resultó inútil: ya
+puntuaba 0.926 porque las normales están suavizadas, mientras la silueta seguía en
+escalera. La métrica buena era la **planaridad** de los vértices. Una métrica que no
+distingue el problema del no-problema hace perder más tiempo que no medir.
+
+**2. Medir la línea base, y que sea determinista.** `restRms` se mide sobre
+posiciones de reposo justamente para que no entre el bamboleo de la gelatina: da
+0.084 idéntico corrida a corrida. Una línea base ruidosa no deja comparar nada.
+
+**3. Medir después, y aceptar el resultado.** Los dos intentos de aplanar la cara
+empeoraron la métrica de forma monótona. Quedaron documentados con sus números en
+vez de mergeados con buena intención.
+
+### Un test que nunca falló no demostró nada
+
+Antes de dar por buena la suite se rompió el código a propósito para ver si se
+ponía en rojo. De tres sabotajes, dos funcionaron y **uno reveló algo más útil que
+si hubiera fallado**: la trampa del buffer GL vacío ya no se reproduce, porque ese
+bug necesitaba dos condiciones y una de ellas —las subidas parciales— no existe más
+en el código. Está anotado en [BACKLOG.md](BACKLOG.md) en vez de fingir cobertura.
+
+El primer sabotaje también enseñó algo: el test de HiDPI **pasaba con el bug
+puesto**, porque Playwright corre con `deviceScaleFactor: 1` y con DPR 1 el buffer
+coincide con el CSS por casualidad. Un test que no reproduce la condición del bug
+es decoración.
 
 ## Performance
 

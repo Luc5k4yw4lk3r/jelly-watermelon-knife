@@ -70,8 +70,9 @@ initialization`) que no es obvio leyendo el stack.
 topología, lanzar jugo, sonar el squish, destellar la hoja y actualizar el HUD son
 decisiones de `main.js`. No volver a meter esos efectos dentro del cutter.
 
-`docs/ARCHITECTURE.md` tiene los porqués en detalle. Lo que sigue es lo que hay que
-saber antes de tocar nada.
+`docs/ARCHITECTURE.md` tiene los porqués en detalle y `docs/BACKLOG.md` lo que
+falta, con el contexto ya averiguado de cada ítem — convienen antes de empezar algo
+nuevo. Lo que sigue es lo que hay que saber antes de tocar nada.
 
 ### El shape matching no es opcional
 
@@ -130,6 +131,22 @@ Tres líneas que parecen de más y no lo son:
   material — y las gotas no se dibujan jamás.
 - **`uFloorY` como uniform** en `render/jelly.glsl.js`, no interpolado como texto
   dentro del GLSL.
+
+## Medir antes de afirmar una mejora
+
+Acá se revirtieron dos mejoras de calidad que parecían obviamente buenas. El
+procedimiento que quedó: definir la métrica **antes**, comprobar que distingue el
+problema del no-problema, medir una línea base determinista, y aceptar el resultado.
+
+La alineación de normales parecía la métrica natural para la cara de corte y era
+inútil (ya daba 0.926 mientras la silueta seguía en escalera). La buena es
+`window.__dev.cutFacePlanarity().restRms`, que se mide sobre posiciones de reposo y
+por eso sale idéntica corrida a corrida.
+
+Lo mismo con los tests: antes de dar una suite por buena, rompé el código a
+propósito y confirmá que se pone en rojo. El test de HiDPI **pasaba con el bug
+puesto** porque Playwright corre con `deviceScaleFactor: 1`, que es justo la
+condición en que el bug no se manifiesta.
 
 ## Qué ya se probó y se descartó
 
