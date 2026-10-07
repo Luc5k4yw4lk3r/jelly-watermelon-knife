@@ -48,7 +48,7 @@ function fmt(v, step) {
   return v.toFixed(decimals);
 }
 
-export function createTuner({ onStiffnessChange }) {
+export function createTuner({ onStiffnessChange, recorder, hud }) {
   const panel = document.createElement('aside');
   panel.id = 'tuner';
   panel.setAttribute('aria-label', 'Panel de tuneo');
@@ -104,6 +104,30 @@ export function createTuner({ onStiffnessChange }) {
     onStiffnessChange();
   });
   panel.appendChild(reset);
+
+  /* Grabador de landmarks. Vive acá y no en el HUD principal porque es una
+     herramienta de desarrollo: sirve para capturar fixtures de mano real, que
+     es lo único que hace testeable el camino de tracking. */
+  if (recorder) {
+    const rec = document.createElement('button');
+    rec.type = 'button';
+    rec.className = 'treset trec';
+    rec.textContent = '● Grabar landmarks';
+    rec.addEventListener('click', () => {
+      if (recorder.recording) {
+        const n = recorder.stopAndDownload('landmarks');
+        rec.textContent = '● Grabar landmarks';
+        rec.classList.remove('on');
+        if (hud) hud.toast(n ? n + ' frames guardados' : 'No se grabó nada');
+      } else {
+        recorder.start();
+        rec.textContent = '■ Detener y bajar';
+        rec.classList.add('on');
+        if (hud) hud.toast('Grabando… activá la cámara si no lo hiciste');
+      }
+    });
+    panel.appendChild(rec);
+  }
 
   document.body.appendChild(panel);
 

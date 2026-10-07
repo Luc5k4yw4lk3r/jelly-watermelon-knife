@@ -1,0 +1,127 @@
+/**
+ * Superficie de depuración, solo con `?dev` en la URL.
+ *
+ * Existe porque medir cualquier cosa de esta app requería parchear el fuente,
+ * buildear y revertir — tres veces en una sola sesión. Con esto los tests y la
+ * consola pueden preguntar sin tocar el código, y la métrica que decide si una
+ * mejora de la cara de corte sirve queda estable entre versiones.
+ */
+export const DEV = new URLSearchParams(location.search).has('dev');
+
+/**
+ * Estado que el frame loop consulta cuando `?dev` está activo.
+ *
+ * Poder congelar la simulación es lo que permite comparar dos frames idénticos
+ * salvo por una cosa. Sin eso, un pixel-diff compara escenas distintas porque la
+ * gelatina nunca deja de moverse.
+ */
+export const devState = { paused: false, juiceVisible: null };
+
+export function installDevtools({ lat, topo, jelly, juice, blades, replay, getPieces, getPhysMs, getCuts }) {
+  if (!DEV) return;
+
+  /**
+   * Planaridad de la cara de corte: RMS de la distancia de sus vértices al plano
+   * de mejor ajuste, en unidades de mundo.
+   *
+   * Es la métrica correcta para la silueta escalonada. La alineación de normales
+   * **no** sirve: ya puntúa 0.93 porque las normales están suavizadas, mientras
+   * la silueta sigue en escalera. Esto mide la amplitud del escalón, que es lo
+   * que se ve. Una celda de la lattice mide ~0.18, así que la línea base ronda
+   * 0.09 y una cara realmente plana debería dar < 0.02.
+   */
+  function planarityOf(positions, idxs) {
+    const n = idxs.length;
+    if (n < 4) return 0;
+    let cx = 0, cy = 0, cz = 0;
+    for (const p of idxs) { cx += positions[p*3]; cy += positions[p*3+1]; cz += positions[p*3+2]; }
+    cx /= n; cy /= n; cz /= n;
+
+    let xx=0, xy=0, xz=0, yy=0, yz=0, zz=0;
+    for (const p of idxs) {
+      const dx = positions[p*3]-cx, dy = positions[p*3+1]-cy, dz = positions[p*3+2]-cz;
+      xx+=dx*dx; xy+=dx*dy; xz+=dx*dz; yy+=dy*dy; yz+=dy*dz; zz+=dz*dz;
+    }
+    // normal del plano de mejor ajuste: autovector menor de la covarianza. Se
+    // itera sobre (traza*I - C), que invierte el orden espectral y deja el menor
+    // como dominante
+    const tr = xx + yy + zz;
+    const m = [tr-xx, -xy, -xz, -xy, tr-yy, -yz, -xz, -yz, tr-zz];
+    let vx = 1, vy = 1, vz = 1;
+    for (let it = 0; it < 48; it++) {
+      const nx = m[0]*vx + m[1]*vy + m[2]*vz;
+      const ny = m[3]*vx + m[4]*vy + m[5]*vz;
+      const nz = m[6]*vx + m[7]*vy + m[8]*vz;
+      const l = Math.hypot(nx, ny, nz) || 1;
+      vx = nx/l; vy = ny/l; vz = nz/l;
+    }
+    let sum = 0;
+    for (const p of idxs) {
+      const d = (positions[p*3]-cx)*vx + (positions[p*3+1]-cy)*vy + (positions[p*3+2]-cz)*vz;
+      sum += d*d;
+    }
+    return +Math.sqrt(sum / n).toFixed(4);
+  }
+
+  /**
+   * Planaridad de la cara de corte: RMS de la distancia de sus vértices al plano
+   * de mejor ajuste, en unidades de mundo.
+   *
+   * Es la métrica correcta para la silueta escalonada. La alineación de normales
+   * **no** sirve: ya puntúa 0.93 porque las normales están suavizadas, mientras
+   * la silueta sigue en escalera. Esto mide la amplitud del escalón, que es lo
+   * que se ve. Una celda de la lattice mide ~0.18.
+   *
+   * Se devuelven dos números:
+   *  - `rms`: sobre la malla tal como se dibuja. Es el que importa, pero incluye
+   *    el bamboleo de la gelatina, así que varía entre corridas.
+   *  - `restRms`: sobre las posiciones de reposo. Mide solo la escalera
+   *    geométrica, sin deformación: es determinista y sirve de línea base.
+   */
+  function cutFacePlanarity() {
+    const { visFace, visCount } = topo;
+    const { faceKind, faceCorner, rest } = lat;
+    const idxs = [];
+    const seen = new Set();
+    for (let s = 0; s < visCount; s++) {
+      const f = visFace[s];
+      if (faceKind[f] !== 1) continue;
+      for (let v = 0; v < 4; v++) {
+        const p = faceCorner[f * 4 + v];
+        if (!seen.has(p)) { seen.add(p); idxs.push(p); }
+      }
+    }
+    return {
+      points: idxs.length,
+      rms: planarityOf(jelly.renderPositions(), idxs),
+      restRms: planarityOf(rest, idxs),
+    };
+  }
+
+  window.__dev = {
+    pause() { devState.paused = true; },
+    resume() { devState.paused = false; },
+    /** Fuerza la visibilidad del pool de jugo; null devuelve el control al juego. */
+    setJuiceVisible(v) { devState.juiceVisible = v; },
+    get pieces() { return getPieces(); },
+    /* Cuántas veces el cutter cortó algo, y cuántos resortes en total. Es la
+       medida precisa del contrato "lento empuja, rápido corta": que la sandía
+       llegue a separarse en dos depende además de cuántos frames caigan, lo que
+       hace flaky la aserción sobre el contador de pedazos. */
+    get cuts() { return getCuts(); },
+    get replay() { return replay ? { total: replay.total, done: replay.done, at: replay.at } : null; },
+    /** Estado de las hojas: lo primero que hay que mirar si un tajo no corta. */
+    get blades() {
+      return blades.map((b) => ({
+        active: b.active,
+        opacity: +b.opacity.toFixed(2),
+        speed: +b.speed.toFixed(2),
+        rot: +b.rot.toFixed(3),
+      }));
+    },
+    get juiceCount() { return juice.count; },
+    get physMs() { return +getPhysMs().toFixed(2); },
+    get visibleFaces() { return topo.visCount; },
+    cutFacePlanarity,
+  };
+}

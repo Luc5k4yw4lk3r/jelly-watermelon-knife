@@ -15,6 +15,7 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
  */
 export default defineConfig({
   root: 'src',
+  publicDir: false,
   base: './',
   plugins: [viteSingleFile()],
   build: {

@@ -142,5 +142,8 @@ export function createJellyMesh(lat, scene) {
     markRange(geo.attributes.normal, visCount * 12);
   }
 
-  return { mesh, material, rebuild, update };
+  /** Posiciones tal como se dibujan (post-suavizado), para medición. */
+  const renderPositions = () => smoothPos;
+
+  return { mesh, material, rebuild, update, renderPositions };
 }

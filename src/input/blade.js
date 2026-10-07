@@ -24,7 +24,7 @@ export function createBlade() {
     gx: 0, gy: 0,                              // punto de agarre (origen de la hoja)
   };
 
-  function update(dt, pose) {
+  function update(dt, pose, speedDt) {
     const gotPose = !!pose;
     const wasActive = blade.active;
     blade.active = gotPose;
@@ -74,8 +74,13 @@ export function createBlade() {
 
     const mx = (blade.x0 + blade.x1) * 0.5 - (blade.px0 + blade.px1) * 0.5;
     const my = (blade.y0 + blade.y1) * 0.5 - (blade.py0 + blade.py1) * 0.5;
-    // un frame muy corto reportaría una velocidad de hoja absurda
-    const sdt = Math.max(dt, 1 / 200);
+    /* La velocidad va contra el tiempo **real** del frame, no contra el `dt`
+       que el loop recorta para que la física no explote. Si un frame tardó
+       200 ms, la mano se movió en 200 ms: medirlo contra 100 ms duplica la
+       velocidad y dispara cortes espurios con la mano lenta. Solo pasa en
+       máquinas que van a fps bajos, que es justo donde más molesta.
+       El piso evita el problema inverso: un frame muy corto daría un absurdo. */
+    const sdt = Math.max(speedDt === undefined ? dt : speedDt, 1 / 200);
     blade.vx = mx / sdt; blade.vy = my / sdt;
     blade.speed = Math.hypot(blade.vx, blade.vy);
     if (blade.speed > 14) { const sc = 14 / blade.speed; blade.vx *= sc; blade.vy *= sc; }
