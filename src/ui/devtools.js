@@ -20,6 +20,7 @@ export const DEV = new URLSearchParams(location.search).has('dev');
 export const devState = { paused: false, juiceVisible: null };
 
 export function installDevtools({
+  cutFaces,
   lat, topo, jelly, juice, replay, pieces,
   getBlades, getMechanic, getMechanicState, getPieces, getPhysMs, getCuts, getScore,
   cutLine, splitAt,
@@ -54,6 +55,16 @@ export function installDevtools({
         if (!seen.has(p)) { seen.add(p); idxs.push(p); }
       }
     }
+    /* Con el recorte activo, lo que se ve es la sección y no las caras de celda:
+       medir las viejas diría que no cambió nada mientras la pantalla muestra
+       otra cosa. La métrica tiene que mirar lo que se dibuja. */
+    const sec = cutFaces ? cutFaces.sectionRest() : null;
+    if (sec && sec.length) {
+      const n = sec.length / 3;
+      const all = Array.from({ length: n }, (_, i) => i);
+      return { points: n, rms: planarityOf(cutFaces.renderPositions(), all), restRms: planarityOf(sec, all) };
+    }
+
     return {
       points: idxs.length,
       rms: planarityOf(jelly.renderPositions(), idxs),
@@ -110,5 +121,7 @@ export function installDevtools({
     get physMs() { return +getPhysMs().toFixed(2); },
     get visibleFaces() { return topo.visCount; },
     cutFacePlanarity,
+    /** Tamaño de la cara de corte: si es cero, no se está dibujando nada. */
+    get cutFaceStats() { return cutFaces ? cutFaces.stats : null; },
   };
 }

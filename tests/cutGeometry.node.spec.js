@@ -100,7 +100,7 @@ test('la sección cubre la elipse entera, no un parche', () => {
 
   let area = 0;
   for (let p = 0; p < geo.nPoly; p++) {
-    if (geo.polySide[p] < 0) continue;          // un lado solo: los dos coinciden
+    if (geo.polySide[p] < 0 || !geo.polyIsSection[p]) continue;   // un lado, y sin paredes
     area += polyArea(geo, p);
   }
   const elipse = Math.PI * RY * RZ;
@@ -166,7 +166,9 @@ test('cada mitad se lleva su cara: la sección no se estira entre las dos', () =
 /** Área de las secciones de un lado, en reposo o en las posiciones que se pasen. */
 function sideArea(geo, side, pts = geo.vRest) {
   let a = 0;
-  for (let p = 0; p < geo.nPoly; p++) if (geo.polySide[p] === side) a += polyArea(geo, p, pts);
+  for (let p = 0; p < geo.nPoly; p++) {
+    if (geo.polySide[p] === side && geo.polyIsSection[p]) a += polyArea(geo, p, pts);
+  }
   return a;
 }
 
@@ -174,7 +176,7 @@ function sideArea(geo, side, pts = geo.vRest) {
 function sideCentroid(geo, side) {
   let x = 0, y = 0, z = 0, n = 0;
   for (let p = 0; p < geo.nPoly; p++) {
-    if (geo.polySide[p] !== side) continue;
+    if (geo.polySide[p] !== side || !geo.polyIsSection[p]) continue;
     for (let i = 0; i < geo.polyLen[p]; i++) {
       const o = (geo.polyStart[p] + i) * 3;
       x += geo.vPos[o]; y += geo.vPos[o + 1]; z += geo.vPos[o + 2]; n++;
@@ -182,3 +184,54 @@ function sideCentroid(geo, side) {
   }
   return [x / n, y / n, z / n];
 }
+
+test('el remanente de la celda llega hasta el plano, también por la cáscara', () => {
+  /* Con la sección sola, la cara plana queda flotando: el tajo se comió una capa
+     de celdas y entre la fruta que quedó y el plano no hay nada. Las paredes de
+     la celda muerta, recortadas, son las que cierran ese hueco — y la de afuera
+     va como corteza, que es lo que hace que el verde llegue hasta el plano. */
+  const ctx = melon();
+  const plane = chop(ctx, { x: 0, z: -1.5 }, { x: 0, z: 1.5 });
+  const geo = createCutGeometry(ctx.lat);
+  geo.rebuild(plane, ctx.topo);
+
+  let paredes = 0, corteza = 0, tocanElPlano = 0;
+  for (let p = 0; p < geo.nPoly; p++) {
+    if (geo.polyIsSection[p]) continue;
+    paredes++;
+    if (geo.polyKind[p] === 0) corteza++;
+    for (let i = 0; i < geo.polyLen[p]; i++) {
+      // el plano es x = 0: un vértice sobre él cierra contra la sección
+      if (Math.abs(geo.vRest[(geo.polyStart[p] + i) * 3]) < 1e-6) tocanElPlano++;
+    }
+  }
+  console.log('paredes:', paredes, '| de corteza:', corteza, '| vértices sobre el plano:', tocanElPlano);
+
+  expect(paredes).toBeGreaterThan(0);
+  expect(corteza).toBeGreaterThan(0);
+  expect(tocanElPlano).toBeGreaterThan(0);
+});
+
+test('la sección cae sobre el plano, no cerca', () => {
+  /* Más filoso que la planaridad: el RMS mide contra el plano de mejor ajuste,
+     así que una sección entera corrida —o construida con los restos de otro
+     recorte— puede salir plana y estar en otro lado. Esto mide contra el plano
+     del corte, que es el único que vale. */
+  const ctx = melon();
+  const plane = chop(ctx, { x: 0, z: -1.5 }, { x: 0, z: 1.5 });
+  const geo = createCutGeometry(ctx.lat);
+  geo.rebuild(plane, ctx.topo);
+
+  let max = 0;
+  for (let p = 0; p < geo.nPoly; p++) {
+    if (!geo.polyIsSection[p]) continue;
+    for (let i = 0; i < geo.polyLen[p]; i++) {
+      const o = (geo.polyStart[p] + i) * 3;
+      const d = (geo.vRest[o] - plane.px) * plane.nx
+              + (geo.vRest[o + 1] - plane.py) * plane.ny
+              + (geo.vRest[o + 2] - plane.pz) * plane.nz;
+      max = Math.max(max, Math.abs(d));
+    }
+  }
+  expect(max).toBeLessThan(1e-9);
+});

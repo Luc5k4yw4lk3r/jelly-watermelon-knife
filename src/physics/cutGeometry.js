@@ -1,5 +1,5 @@
 import { NX, NY, NZ } from '../config.js';
-import { capPolygon } from './cellClip.js';
+import { capPolygon, clipFace } from './cellClip.js';
 
 /**
  * Geometría sub-celda de la cara de corte.
@@ -24,15 +24,20 @@ import { capPolygon } from './cellClip.js';
 const NCX = NX - 1, NCY = NY - 1, NCZ = NZ - 1;
 const NCELL = NCX * NCY * NCZ;
 
-/* Una celda aporta a lo sumo la sección de sus dos lados: 6 vértices cada una. */
-const MAX_VERT = NCELL * 12;
+/* Por celda y por lado: la sección (≤6 vértices) y sus 6 paredes (≤5 cada una).
+   Nunca se llena ni de cerca —un tajo toca el 9% de las celdas— pero reservarlo
+   una vez evita decidir nada en caliente. */
+const MAX_VERT = NCELL * 2 * (6 + 6 * 5);
 
 export function createCutGeometry(lat) {
-  const { pos, rest, cellCorner } = lat;
+  const { pos, rest, cellCorner, faceNbCell, faceKind } = lat;
 
   const dist = new Float64Array(8);
   const corner = new Float64Array(24);
-  const capA = new Int32Array(8), capB = new Int32Array(8), capT = new Float64Array(8);
+  /* La sección y las paredes no pueden compartir buffer: las paredes se
+     recortan entre el lado + y el lado −, y le pisarían la sección al segundo. */
+  const secA = new Int32Array(8), secB = new Int32Array(8), secT = new Float64Array(8);
+  const facA = new Int32Array(8), facB = new Int32Array(8), facT = new Float64Array(8);
 
   /* Por vértice: el ancla, la otra punta de la arista y el parámetro desde el
      ancla. Una esquina se escribe como `(a, a, 0)`, y entonces interpolar
@@ -49,6 +54,13 @@ export function createCutGeometry(lat) {
      cada una se ancla a las partículas de su mitad y a partir de ahí viajan por
      separado. */
   const polySide = new Int8Array(MAX_VERT / 3);
+  /** La sección va sobre el plano; las paredes son el resto del remanente. */
+  const polyIsSection = new Uint8Array(MAX_VERT / 3);
+  /** 0 corteza, 1 pulpa: lo mismo que `faceKind`, y lo que el shader colorea. */
+  const polyKind = new Uint8Array(MAX_VERT / 3);
+
+  /** Qué celdas recortó este corte: una pared contra una de ellas es interior. */
+  const cellCut = new Uint8Array(NCELL);
 
   let nVert = 0, nPoly = 0;
 
@@ -62,6 +74,7 @@ export function createCutGeometry(lat) {
     const { cellSolid } = topo;
     const { px, py, pz, nx, ny, nz } = plane;
     nVert = 0; nPoly = 0;
+    cellCut.fill(0);
 
     for (let c = 0; c < NCELL; c++) {
       if (cellSolid[c]) continue;                 // viva: la dibuja la malla de siempre
@@ -85,8 +98,9 @@ export function createCutGeometry(lat) {
         corner[v * 3] = rest[o]; corner[v * 3 + 1] = rest[o + 1]; corner[v * 3 + 2] = rest[o + 2];
       }
 
-      const n = capPolygon(corner, dist, nx, ny, nz, capA, capB, capT);
+      const n = capPolygon(corner, dist, nx, ny, nz, secA, secB, secT);
       if (!n) continue;
+      cellCut[c] = 1;
 
       /* Una sección por lado: cada mitad se lleva la suya, anclada a sus propias
          partículas. */
@@ -94,9 +108,11 @@ export function createCutGeometry(lat) {
         polyStart[nPoly] = nVert;
         polyLen[nPoly] = n;
         polySide[nPoly] = side;
+        polyIsSection[nPoly] = 1;
+        polyKind[nPoly] = 1;                 // la sección siempre es pulpa
         nPoly++;
         for (let i = 0; i < n; i++) {
-          const a = capA[i], d = capB[i], t = capT[i];
+          const a = secA[i], d = secB[i], t = secT[i];
           /* El ancla es la esquina que quedó del lado que se conserva. */
           const keepA = (dist[a] > 0) === (side > 0);
           const pa = cellCorner[b + (keepA ? a : d)];
@@ -110,6 +126,41 @@ export function createCutGeometry(lat) {
           vRest[o3 + 1] = rest[oa + 1] + (rest[ob + 1] - rest[oa + 1]) * tt;
           vRest[o3 + 2] = rest[oa + 2] + (rest[ob + 2] - rest[oa + 2]) * tt;
           nVert++;
+        }
+
+        /* Las paredes del remanente. Sin ellas la sección queda flotando: entre
+           la fruta que sobrevivió y el plano hay una capa de celda que el tajo
+           se comió y que nadie dibuja. */
+        for (let d = 0; d < 6; d++) {
+          const f = c * 6 + d;
+          const nb = faceNbCell[f];
+          /* Hacia adentro de la fruta no hay nada que mostrar: o la vecina está
+             viva —y entonces el remanente se le apoya— o también se recortó y su
+             propia pared tapa esta. Lo que se dibuja es lo que da al aire: el
+             borde de la lattice, o un hueco que dejó otro corte. */
+          if (nb >= 0 && (cellSolid[nb] || cellCut[nb])) continue;
+
+          const m = clipFace(corner, dist, d, side, facA, facB, facT);
+          if (!m) continue;
+          polyStart[nPoly] = nVert;
+          polyLen[nPoly] = m;
+          polySide[nPoly] = side;
+          polyIsSection[nPoly] = 0;
+          polyKind[nPoly] = faceKind[f];
+          nPoly++;
+          for (let i = 0; i < m; i++) {
+            const a = facA[i], e = facB[i], t = facT[i];
+            const keepA = a === e || (dist[a] > 0) === (side > 0);
+            const pa = cellCorner[b + (keepA ? a : e)];
+            const pb = cellCorner[b + (keepA ? e : a)];
+            const tt = a === e ? 0 : (keepA ? t : 1 - t);
+            vAnchor[nVert] = pa; vOther[nVert] = pb; vT[nVert] = tt;
+            const oa = pa * 3, ob = pb * 3, o3 = nVert * 3;
+            vRest[o3]     = rest[oa]     + (rest[ob]     - rest[oa])     * tt;
+            vRest[o3 + 1] = rest[oa + 1] + (rest[ob + 1] - rest[oa + 1]) * tt;
+            vRest[o3 + 2] = rest[oa + 2] + (rest[ob + 2] - rest[oa + 2]) * tt;
+            nVert++;
+          }
         }
       }
     }
@@ -156,9 +207,24 @@ export function createCutGeometry(lat) {
     }
   }
 
-  /** Las posiciones de reposo de la sección: lo que mide la planaridad. */
+  /**
+   * Las posiciones de reposo **de la sección**: lo que mide la planaridad.
+   *
+   * Las paredes quedan afuera a propósito: son superficie legítima de la pieza
+   * —van de la fruta al plano— y meterlas infla el número hasta que deja de
+   * decir nada sobre lo plana que quedó la cara.
+   */
+  const secPts = new Float64Array(MAX_VERT * 3);
   function sectionRest() {
-    return vRest.subarray(0, nVert * 3);
+    let k = 0;
+    for (let p = 0; p < nPoly; p++) {
+      if (!polyIsSection[p]) continue;
+      for (let i = 0; i < polyLen[p]; i++) {
+        const o = (polyStart[p] + i) * 3;
+        secPts[k++] = vRest[o]; secPts[k++] = vRest[o + 1]; secPts[k++] = vRest[o + 2];
+      }
+    }
+    return secPts.subarray(0, k);
   }
 
   return {
@@ -166,5 +232,6 @@ export function createCutGeometry(lat) {
     get nVert() { return nVert; },
     get nPoly() { return nPoly; },
     vAnchor, vOther, vT, vRest, vPos, polyStart, polyLen, polySide,
+    polyIsSection, polyKind,
   };
 }

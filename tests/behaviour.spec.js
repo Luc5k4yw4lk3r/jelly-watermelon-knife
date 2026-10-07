@@ -721,3 +721,38 @@ test('la cruz de apuntado se ve de verdad', async ({ page }) => {
   expect(box.bars).toHaveLength(2);
   for (const b of box.bars) expect(b.w * b.h).toBeGreaterThan(0);
 });
+
+test('«Rebanada» deja la cara sobre el plano; «Cuchillo» la deja en escalera', async ({ page }) => {
+  /* El mismo corte, dos mecánicas, dos números: es el A/B que la arquitectura
+     regala, porque lo único que cambia entre las dos es la geometría de la cara.
+     Se corta con `cutLine` y sobre la sandía en reposo, así el número es
+     determinista y el test cuesta un frame en vez de siete segundos. */
+  const errs = problems(page);
+  const medir = async (mech) => {
+    await bootMech(page, mech);
+    await pristine(page);
+    await page.evaluate(() => window.__dev.cutLine(0, -1.6, 0, 1.6));
+    return page.evaluate(() => ({
+      rms: window.__dev.cutFacePlanarity().restRms,
+      pts: window.__dev.cutFacePlanarity().points,
+      cara: window.__dev.cutFaceStats,
+      pedazos: window.__dev.pieces,
+    }));
+  };
+
+  const escalera = await medir('lineKnife');
+  const plana = await medir('sliceKnife');
+  console.log('escalera:', JSON.stringify(escalera), '\nplana:', JSON.stringify(plana));
+
+  // la línea base no se movió: «Cuchillo» sigue viéndose como siempre
+  expect(escalera.rms).toBeGreaterThan(0.05);
+  expect(escalera.cara.tris).toBe(0);
+
+  // y la cara nueva está sobre el plano, y existe de verdad
+  expect(plana.cara.tris).toBeGreaterThan(100);
+  expect(plana.rms).toBeLessThan(0.02);
+
+  // lo que no puede cambiar es la física: el mismo corte parte igual
+  expect(plana.pedazos).toBe(escalera.pedazos);
+  expect(errs).toEqual([]);
+});
