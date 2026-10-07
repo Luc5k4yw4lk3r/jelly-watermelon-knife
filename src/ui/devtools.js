@@ -126,6 +126,23 @@ export function installDevtools({
     get mechanic() { return getMechanic(); },
     /** Lo que la mecánica activa quiera exponer; null si no expone nada. */
     get mechanicState() { return getMechanicState(); },
+    /** Tamaños de las componentes conexas vivas, de mayor a menor.
+        El contador de pedazos ignora las de menos de 10 partículas; esto muestra
+        todo, que es lo que hace falta cuando un corte se ve y no separa. */
+    get components() {
+      const { N, M, sprA, sprB, sprAlive } = lat;
+      const par = new Int32Array(N);
+      for (let i = 0; i < N; i++) par[i] = i;
+      const find = (x) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+      for (let m = 0; m < M; m++) {
+        if (!sprAlive[m]) continue;
+        const a = find(sprA[m]), b = find(sprB[m]);
+        if (a !== b) par[a] = b;
+      }
+      const size = new Int32Array(N);
+      for (let i = 0; i < N; i++) size[find(i)]++;
+      return Array.from(size).filter((n) => n > 0).sort((a, b) => b - a);
+    },
     get juiceCount() { return juice.count; },
     get physMs() { return +getPhysMs().toFixed(2); },
     get visibleFaces() { return topo.visCount; },

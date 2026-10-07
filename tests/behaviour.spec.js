@@ -311,3 +311,128 @@ test('el replay de landmarks mueve el cuchillo y corta', async ({ page }) => {
   expect(c.events).toBeGreaterThan(0);
   expect(errs).toEqual([]);
 });
+
+/* ── mecánica «Cuchillo»: dibujar una línea y tajar ──────────────────────── */
+
+/**
+ * Arranca directamente en una mecánica, sin pasar por el selector.
+ *
+ * `?mech=` existe para esto y para desarrollo: elegir desde la UI es otro test.
+ */
+async function bootMech(page, id) {
+  await boot(page, `?dev&mech=${id}`);
+}
+
+/**
+ * Dibuja una línea con el mouse: apoyar en A, arrastrar hasta B, soltar.
+ *
+ * Nada de esto depende de la velocidad —esta mecánica no tiene umbral— así que
+ * no hacen falta las unidades de mundo por segundo que necesita el tajo libre.
+ * Lo que sí importa es **esperar** antes de apretar: la cuchilla sigue al
+ * puntero con suavizado, y A se fija donde está la cuchilla, no donde está el
+ * cursor. Sin la espera, A queda a mitad de camino del movimiento anterior.
+ */
+async function lineDrag(page, from, to) {
+  const { width, height } = page.viewportSize();
+  await page.evaluate(async (o) => {
+    const cv = document.getElementById('gl');
+    const raf = () => new Promise((r) => requestAnimationFrame(() => r()));
+    const move = (x, y) => dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, bubbles: true }));
+
+    move(o.x0, o.y0);
+    for (let i = 0; i < 25; i++) await raf();   // que el suavizado alcance a A
+
+    cv.dispatchEvent(new PointerEvent('pointerdown', {
+      clientX: o.x0, clientY: o.y0, button: 0, pointerId: 1, pointerType: 'mouse', bubbles: true,
+    }));
+    for (let i = 1; i <= 14; i++) {
+      move(o.x0 + (o.x1 - o.x0) * i / 14, o.y0 + (o.y1 - o.y0) * i / 14);
+      await raf();
+    }
+    for (let i = 0; i < 14; i++) await raf();   // y que alcance a B
+    dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, bubbles: true }));
+  }, {
+    x0: from[0] * width, y0: from[1] * height,
+    x1: to[0] * width,   y1: to[1] * height,
+  });
+  await page.waitForTimeout(1600);              // golpe + retirada
+}
+
+/** Trazo que cruza la sandía entera, de lado a lado. */
+const ACROSS = [[0.25, 0.67], [0.77, 0.52]];
+
+const mechanic = (page) => page.evaluate(() => window.__dev.mechanic);
+const lastCut = (page) => page.evaluate(() => window.__dev.mechanicState.lastCut);
+
+test('arranca en la mecánica por defecto, y ?mech elige otra', async ({ page }) => {
+  await boot(page);
+  expect(await mechanic(page)).toBe('handKnife');
+
+  await bootMech(page, 'lineKnife');
+  expect(await mechanic(page)).toBe('lineKnife');
+});
+
+test('arrastrar y soltar parte la sandía en dos', async ({ page }) => {
+  const errs = problems(page);
+  await bootMech(page, 'lineKnife');
+
+  await lineDrag(page, ...ACROSS);
+
+  expect(await pieces(page)).toBe('2');
+  expect((await cuts(page)).events).toBe(1);
+
+  // y la cara expuesta existe: es la misma que mide la planaridad
+  const m = await page.evaluate(() => window.__dev.cutFacePlanarity());
+  expect(m.points).toBeGreaterThan(100);
+  expect(errs).toEqual([]);
+});
+
+test('un trazo más corto que el mínimo no corta', async ({ page }) => {
+  const errs = problems(page);
+  await bootMech(page, 'lineKnife');
+
+  // unos pocos píxeles: por debajo de MIN_CUT_LEN en unidades de mundo
+  await lineDrag(page, [0.5, 0.6], [0.515, 0.597]);
+
+  expect((await cuts(page)).events).toBe(0);
+  expect(await pieces(page)).toBe('1');
+  expect(errs).toEqual([]);
+});
+
+test('cambiar de mecánica en caliente conserva los pedazos', async ({ page }) => {
+  const errs = problems(page);
+  await bootMech(page, 'lineKnife');
+  await lineDrag(page, ...ACROSS);
+  expect(await pieces(page)).toBe('2');
+
+  await page.selectOption('#mech', 'handKnife');
+  await page.waitForTimeout(600);
+  expect(await mechanic(page)).toBe('handKnife');
+  expect(await pieces(page)).toBe('2');
+
+  await page.selectOption('#mech', 'lineKnife');
+  await page.waitForTimeout(600);
+  expect(await mechanic(page)).toBe('lineKnife');
+  expect(await pieces(page)).toBe('2');
+  expect(errs).toEqual([]);
+});
+
+test('una mitad se puede volver a cortar', async ({ page }) => {
+  const errs = problems(page);
+  await bootMech(page, 'lineKnife');
+
+  await lineDrag(page, ...ACROSS);
+  expect(await pieces(page)).toBe('2');
+
+  /* Segundo trazo, cruzado con el primero y **de borde a borde**. Después del
+     primer corte las mitades se abren y se acomodan: un trazo que apenas cubría
+     la sandía entera deja de cubrirlas, y lo que asoma más allá de las puntas de
+     la línea no se corta —que es justo lo que pide el requisito de no usar un
+     plano infinito—. Entonces el corte se ve y no separa. */
+  await lineDrag(page, [0.47, 0.06], [0.57, 0.99]);
+
+  expect(Number(await pieces(page))).toBeGreaterThan(2);
+  expect((await cuts(page)).events).toBe(2);
+  expect((await lastCut(page)).severed).toBeGreaterThan(0);
+  expect(errs).toEqual([]);
+});

@@ -79,13 +79,13 @@ export const tune = {
   EURO_BETA: 0.9,
 
   // mecánica "Cuchillo": dibujar una línea y tajar
-  HOVER_H: 1.45,            // altura de espera sobre el centro de la fruta
+  HOVER_H: 0.95,            // altura de espera sobre el centro de la fruta
   ALIGN_MS: 170,            // alinearse sobre AB
   STRIKE_MS: 340,           // bajar; con ease-in, para que se sienta pesado
   RETRACT_MS: 250,          // volver a subir
   MIN_CUT_LEN: 0.35,        // línea más corta que esto no corta
   CUT_MARGIN: 0.06,         // cuánto se extiende el corte más allá de A y de B
-  SEP_IMPULSE: 0.02,        // empujón que abre las mitades; techo en MAX_STEP_DISP
+  SEP_IMPULSE: 0.0015,      // empujón que abre las mitades (ver physics/impulse.js)
   MAX_PIECES: 24,
 };
 

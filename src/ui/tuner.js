@@ -41,6 +41,17 @@ const GROUPS = [
       { key: 'MAX_CUT_ROT', label: 'Giro máx. al cortar', min: 0.05, max: 1, step: 0.01 },
     ],
   },
+  {
+    title: 'Cuchilla de línea',
+    fields: [
+      { key: 'HOVER_H', label: 'Altura de espera', min: 0.6, max: 2.6, step: 0.05 },
+      { key: 'MIN_CUT_LEN', label: 'Línea mínima', min: 0.1, max: 1.5, step: 0.05 },
+      { key: 'STRIKE_MS', label: 'Golpe (ms)', min: 120, max: 900, step: 10 },
+      { key: 'SEP_IMPULSE', label: 'Apertura', min: 0, max: 0.06, step: 0.002 },
+      { key: 'PINCH_ON', label: 'Pinza: cerrar', min: 0.08, max: 0.6, step: 0.01 },
+      { key: 'PINCH_OFF', label: 'Pinza: abrir', min: 0.12, max: 0.9, step: 0.01 },
+    ],
+  },
 ];
 
 function fmt(v, step) {
