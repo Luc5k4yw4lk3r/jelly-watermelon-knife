@@ -1,0 +1,303 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "El camino de un corte",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "cuchillo",
+        "label": "Cuchillo de línea",
+        "focus": [
+          "gesto",
+          "linea",
+          "cut",
+          "oncut",
+          "rebuild",
+          "medir",
+          "hud"
+        ],
+        "note": "La única mecánica que corta por un plano, y por eso la única que se puede puntuar."
+      },
+      {
+        "id": "tajo-libre",
+        "label": "Tajo libre",
+        "focus": [
+          "gesto",
+          "blade",
+          "cut",
+          "oncut"
+        ],
+        "note": "Comparte cutter y onCut, pero barre un cuadrilátero: ahí un split no está definido."
+      },
+      {
+        "id": "efectos",
+        "label": "Dónde viven los efectos",
+        "focus": [
+          "cut",
+          "oncut",
+          "rebuild",
+          "medir"
+        ],
+        "note": "El cutter solo devuelve qué pasó; jugo, sonido, topología y puntaje son de onCut."
+      }
+    ],
+    "legend": {
+      "entries": {
+        "frontend": {
+          "label": "Pantalla"
+        },
+        "backend": {
+          "label": "Lógica"
+        },
+        "external": {
+          "label": "Gesto del jugador"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "pantalla",
+      "label": "Gesto y pantalla"
+    },
+    {
+      "id": "linea",
+      "label": "Cuchillo de línea"
+    },
+    {
+      "id": "efectos",
+      "label": "Corte y efectos"
+    }
+  ],
+  "phases": [
+    {
+      "id": "ph-gesto",
+      "label": "Gesto",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "ph-corte",
+      "label": "Corte",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "ph-puntaje",
+      "label": "Reconstrucción y puntaje",
+      "fromCol": 4,
+      "toCol": 5
+    }
+  ],
+  "mainPath": [
+    "gesto",
+    "linea",
+    "cut",
+    "oncut",
+    "rebuild",
+    "medir"
+  ],
+  "semanticChecks": {
+    "allowedRoots": [
+      "gesto"
+    ],
+    "allowedTerminals": [
+      "hud"
+    ],
+    "requiredEdges": [
+      {
+        "from": "blade",
+        "to": "cut"
+      }
+    ],
+    "requiredPaths": [
+      {
+        "from": "gesto",
+        "to": "hud"
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "gesto",
+      "lane": "pantalla",
+      "col": 0,
+      "type": "external",
+      "label": "Gesto",
+      "sublabel": "mano · mouse · replay",
+      "width": 140
+    },
+    {
+      "id": "hud",
+      "lane": "pantalla",
+      "col": 5,
+      "type": "frontend",
+      "label": "HUD y etiquetas",
+      "sublabel": "pedazos y precisión",
+      "width": 140
+    },
+    {
+      "id": "linea",
+      "lane": "linea",
+      "col": 1,
+      "type": "backend",
+      "label": "Cuchillo de línea",
+      "sublabel": "FSM + verticalCut()",
+      "tag": "corta por un plano",
+      "width": 140
+    },
+    {
+      "id": "blade",
+      "lane": "pantalla",
+      "col": 1,
+      "type": "backend",
+      "label": "Tajo libre",
+      "sublabel": "la hoja sigue la mano",
+      "tag": "MAX_KERF · MAX_CUT_ROT",
+      "width": 140
+    },
+    {
+      "id": "cut",
+      "lane": "efectos",
+      "col": 2,
+      "type": "backend",
+      "label": "cutter.cut(blade)",
+      "sublabel": "mata los resortes",
+      "tag": "puro",
+      "width": 140
+    },
+    {
+      "id": "oncut",
+      "lane": "efectos",
+      "col": 3,
+      "type": "backend",
+      "label": "onCut()",
+      "sublabel": "jugo · squish · hoja",
+      "tag": "los efectos, solo acá",
+      "width": 140
+    },
+    {
+      "id": "rebuild",
+      "lane": "efectos",
+      "col": 4,
+      "type": "backend",
+      "label": "Reconstrucción",
+      "sublabel": "topo · shape · malla",
+      "width": 140
+    },
+    {
+      "id": "medir",
+      "lane": "efectos",
+      "col": 5,
+      "type": "backend",
+      "label": "Medición",
+      "sublabel": "volume · cutScore",
+      "tag": "solo si hay plano",
+      "width": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "arrastrar",
+      "from": "gesto",
+      "to": "linea",
+      "label": "arrastrá y soltá",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "mover-hoja",
+      "from": "gesto",
+      "to": "blade",
+      "label": "tajo rápido",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "plano",
+      "from": "linea",
+      "to": "cut",
+      "label": "kerf ∞ · crossDepth",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "barrido",
+      "from": "blade",
+      "to": "cut",
+      "label": "quad barrido",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "severed",
+      "from": "cut",
+      "to": "oncut",
+      "label": "severed > 0",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "rehacer",
+      "from": "oncut",
+      "to": "rebuild",
+      "label": "cambió la topología",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "puntuar",
+      "from": "rebuild",
+      "to": "medir",
+      "label": "hubo split",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "mostrar",
+      "from": "medir",
+      "to": "hud",
+      "label": "precisión y rango",
+      "role": "branch"
+    },
+    {
+      "id": "pedazos",
+      "from": "rebuild",
+      "to": "hud",
+      "label": "pedazos",
+      "variant": "dashed",
+      "role": "branch"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Dos mecánicas, un corte",
+      "items": [
+        "Las dos llaman al mismo cutter.cut(blade)",
+        "La cuchilla corta de una sola llamada, sin kerf",
+        "Cambiar de mecánica conserva los pedazos"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Un solo punto de paso",
+      "items": [
+        "rebuildAfterTopologyChange() centraliza todo",
+        "Rehace topología, shape, pedazos y malla",
+        "Medir ahí cubre las dos mecánicas y el reset"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Solo se puntúa si hay plano",
+      "items": [
+        "El tajo libre barre un cuadrilátero, no un plano",
+        "Ahí un split no está definido: no se inventa",
+        "El reparto se mide contra el plano"
+      ]
+    }
+  ]
+}

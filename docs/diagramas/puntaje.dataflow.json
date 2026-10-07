@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Pipeline del puntaje de un corte",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1068,
+      500
+    ],
+    "views": [
+      {
+        "id": "reposo",
+        "label": "Qué se mide y con qué",
+        "focus": [
+          "lat",
+          "volume"
+        ],
+        "note": "Clasificar con las posiciones deformadas, interpolar con las de reposo."
+      },
+      {
+        "id": "identidad",
+        "label": "Identidad de los pedazos",
+        "focus": [
+          "lat",
+          "pieces",
+          "meter"
+        ],
+        "note": "Union-find con id heredado: sin eso no se sabe de qué pedazo es mitad cada mitad."
+      },
+      {
+        "id": "salida",
+        "label": "Del número a la pantalla",
+        "focus": [
+          "meter",
+          "score",
+          "hud",
+          "labels"
+        ],
+        "note": "scoreSplit es aritmética y nada más; el historial y la pantalla van después."
+      }
+    ],
+    "legend": {
+      "entries": {
+        "default": {
+          "label": "Flujo de datos"
+        },
+        "emphasis": {
+          "label": "Camino principal"
+        },
+        "dashed": {
+          "label": "Derivado"
+        },
+        "database": {
+          "label": "Estado"
+        }
+      }
+    }
+  },
+  "stages": [
+    {
+      "label": "Estado de la lattice"
+    },
+    {
+      "label": "Geometría e identidad"
+    },
+    {
+      "label": "Medición"
+    },
+    {
+      "label": "Puntaje"
+    },
+    {
+      "label": "Pantalla"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "lat",
+      "type": "database",
+      "label": "Lattice",
+      "sublabel": "pos · rest · sprAlive",
+      "tag": "typed arrays",
+      "stage": 0,
+      "row": 1
+    },
+    {
+      "id": "volume",
+      "type": "backend",
+      "label": "splitByPlane()",
+      "sublabel": "recorta tetraedros",
+      "tag": "Freudenthal",
+      "stage": 1,
+      "row": 0
+    },
+    {
+      "id": "pieces",
+      "type": "backend",
+      "label": "pieces.rebuild",
+      "sublabel": "union-find",
+      "tag": "id estable",
+      "stage": 1,
+      "row": 2
+    },
+    {
+      "id": "meter",
+      "type": "backend",
+      "label": "cutMeter",
+      "sublabel": "acotado al padre",
+      "tag": "centroide por lado",
+      "stage": 2,
+      "row": 1
+    },
+    {
+      "id": "score",
+      "type": "backend",
+      "label": "scoreSplit()",
+      "sublabel": "precisión y rango",
+      "tag": "puro",
+      "stage": 3,
+      "row": 1
+    },
+    {
+      "id": "hud",
+      "type": "frontend",
+      "label": "HUD",
+      "sublabel": "último y promedio",
+      "tag": "historial",
+      "stage": 4,
+      "row": 0
+    },
+    {
+      "id": "labels",
+      "type": "frontend",
+      "label": "Etiquetas 3D",
+      "sublabel": "% por mitad",
+      "stage": 4,
+      "row": 2
+    }
+  ],
+  "flows": [
+    {
+      "id": "f-volumen",
+      "from": "lat",
+      "to": "volume",
+      "label": "rest y pos",
+      "classification": "interpola en reposo",
+      "variant": "emphasis"
+    },
+    {
+      "id": "f-resortes",
+      "from": "lat",
+      "to": "pieces",
+      "label": "resortes vivos",
+      "classification": "componentes conexas"
+    },
+    {
+      "id": "f-lados",
+      "from": "volume",
+      "to": "meter",
+      "label": "volumen de cada lado",
+      "variant": "emphasis"
+    },
+    {
+      "id": "f-padres",
+      "from": "pieces",
+      "to": "meter",
+      "label": "qué se partió en qué"
+    },
+    {
+      "id": "f-score",
+      "from": "meter",
+      "to": "score",
+      "label": "volúmenes",
+      "variant": "emphasis"
+    },
+    {
+      "id": "f-hud",
+      "from": "score",
+      "to": "hud",
+      "label": "precisión y rango"
+    },
+    {
+      "id": "f-labels",
+      "from": "score",
+      "to": "labels",
+      "label": "porcentaje por mitad",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Se mide en espacio de reposo",
+      "items": [
+        "rest no se reescribe: el volumen es constante",
+        "El número no se mueve mientras tiembla",
+        "Clasifica con la deformada, interpola en reposo"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Recorta tetraedros",
+      "items": [
+        "Por celdas, el reparto salta de 50/50 a 39/61",
+        "Recortando, la curva es continua",
+        "Repartir por las 8 esquinas conserva el total"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Identidad estable",
+      "items": [
+        "Los slots de shape matching se renumeran",
+        "Cada componente hereda el id por mayoría",
+        "Sin eso no hay «el 3 se partió en 7 y 8»"
+      ]
+    }
+  ]
+}
