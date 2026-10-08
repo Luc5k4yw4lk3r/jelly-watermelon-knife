@@ -361,3 +361,20 @@ test('las mitades reciben el empujón en sentidos opuestos', () => {
   // y el empujón no puede pasarse del tope por paso del solver
   expect(tune.SEP_IMPULSE).toBeLessThan(0.09);
 });
+
+test('la transformación de una pieza recién nacida es la identidad', () => {
+  /* `compT` es lo que va a orientar la cara de corte de cada pedazo, y hoy solo
+     lo escribe `apply()`. Si se corta con la física congelada —que es el camino
+     de `__dev.pause()` y por lo tanto el de medio suite— los slots nuevos
+     quedan con la transformación del corte anterior. Una pieza recién
+     reconstruida y todavía sin simular no está rotada: es la identidad. */
+  const ctx = melon();
+  chop(ctx, { x: 0, z: -1.5 }, { x: 0, z: 1.5 });
+  const n = ctx.shape.rebuild();
+
+  expect(n).toBe(2);
+  for (let c = 0; c < n; c++) {
+    const m = ctx.shape.compT.subarray(c * 9, c * 9 + 9);
+    expect([...m]).toEqual([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+  }
+});

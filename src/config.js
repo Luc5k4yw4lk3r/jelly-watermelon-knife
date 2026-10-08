@@ -97,6 +97,11 @@ export const tune = {
   BLADE_R: 0.062,           // radio del colisionador (empuje lento)
   PUSH_CLAMP: 0.055,
   CUT_SPEED: 4.0,           // u/s a partir de las cuales corta en vez de empujar
+  /* Recorta contra el plano las celdas que el tajo mata, en vez de borrarlas
+     enteras: la cara de corte queda sobre el plano y no en escalera. Apagado
+     por default para poder comparar el mismo corte con y sin. La mecánica
+     «Rebanada» lo prende al entrar. */
+  SUBCELL: false,
   MAX_KERF: 0.085,          // ranura lateral máxima que puede abrir un barrido
   MAX_CUT_ROT: 0.18,        // rad/frame; una hoja que gira pica en vez de cortar
 

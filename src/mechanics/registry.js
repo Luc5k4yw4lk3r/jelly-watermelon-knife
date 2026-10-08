@@ -37,6 +37,19 @@ export const MECHANICS = [
     scores: true,
     hint: '<b>Arrastrá</b> una línea sobre la sandía y <em>soltá</em> &nbsp;·&nbsp; con la mano, <b>pinza</b> de pulgar e índice &nbsp;·&nbsp; <b>Esc</b> cancela &nbsp;·&nbsp; <b>flechas</b> o botón derecho para girar',
   },
+  {
+    id: 'sliceKnife',
+    label: 'Rebanada',
+    create: createLineKnife,
+    scores: true,
+    /* Lo único que la distingue del «Cuchillo»: recorta contra el plano las
+       celdas que el tajo mata en vez de borrarlas, así la cara queda sobre el
+       plano. El gesto, el FSM y el corte son los mismos, a propósito: lo que
+       cambia es la geometría, y teniendo las dos al lado se puede comparar el
+       mismo tajo. */
+    subcell: true,
+    hint: '<b>Arrastrá</b> una línea sobre la sandía y <em>soltá</em> &nbsp;·&nbsp; la cara del corte queda <em>plana</em> &nbsp;·&nbsp; <b>Esc</b> cancela &nbsp;·&nbsp; <b>D</b> para comparar con el interruptor',
+  },
 ];
 
 export const mechanicById = (id) => MECHANICS.find((m) => m.id === id);

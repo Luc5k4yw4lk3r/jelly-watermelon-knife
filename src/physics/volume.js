@@ -20,12 +20,6 @@ import { NX, NY, NZ } from '../config.js';
  * backlog propone para la geometría sub-celda de la cara de corte.
  */
 
-/** Las 8 esquinas de una celda, en el orden que esperan los tetraedros. */
-const CORNERS = [
-  [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
-  [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1],
-];
-
 /** Descomposición de Freudenthal: 6 tetraedros alrededor de la diagonal 0–6. */
 const TETS = [
   [0, 1, 2, 6], [0, 2, 3, 6], [0, 3, 7, 6],
@@ -148,22 +142,10 @@ export function createVolumeMeter(lat) {
   const { rest, pos } = lat;
   const NCX = NX - 1, NCY = NY - 1, NCZ = NZ - 1;
   const NCELL = NCX * NCY * NCZ;
-  const gid = (i, j, k) => (i * NY + j) * NZ + k;
 
-  /* La lattice no tiene tabla de esquinas por celda —solo de aristas—, así que
-     se arma acá una vez. */
-  const corner = new Int32Array(NCELL * 8);
-  for (let i = 0; i < NCX; i++) {
-    for (let j = 0; j < NCY; j++) {
-      for (let k = 0; k < NCZ; k++) {
-        const c = ((i * NCY + j) * NCZ + k) * 8;
-        for (let v = 0; v < 8; v++) {
-          const [a, b, d] = CORNERS[v];
-          corner[c + v] = gid(i + a, j + b, k + d);
-        }
-      }
-    }
-  }
+  /* Las 8 esquinas de cada celda las arma la lattice: también las usa el
+     recorte de la cara de corte. */
+  const corner = lat.cellCorner;
 
   /** Carga las 8 esquinas de la celda `c` en reposo. */
   function loadRest(c) {

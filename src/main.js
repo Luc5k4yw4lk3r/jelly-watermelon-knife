@@ -1,4 +1,4 @@
-import { DT, DEFAULT_MECHANIC } from './config.js';
+import { DT, DEFAULT_MECHANIC, tune } from './config.js';
 
 import { createLattice } from './physics/lattice.js';
 import { createTopology } from './physics/topology.js';
@@ -11,6 +11,7 @@ import { createPieceTracker } from './physics/pieces.js';
 import { createScene } from './render/scene.js';
 import { createJellyMesh } from './render/jellyMesh.js';
 import { createJuice } from './render/juice.js';
+import { createCutFaces } from './render/cutFaces.js';
 
 import { createMouse } from './input/mouse.js';
 import { createPointers } from './input/pointer.js';
@@ -52,6 +53,9 @@ const pieces = createPieceTracker(lat);
 
 const jelly = createJellyMesh(lat, view.scene);
 const juice = createJuice(view.scene, view.basis);
+/* La cara de corte sub-celda. Comparte el material de la gelatina, así que el
+   shader la pinta como pulpa sin saber que existe. */
+const cutFaces = createCutFaces(lat, view.scene, jelly.material);
 
 view.onResize.push(juice.setPixelScale);
 
@@ -171,8 +175,15 @@ function reset() {
 /** El corte cambia la topología; todo lo que depende de ella se rehace acá. */
 let pieceCount = 1;
 let cutEvents = 0, severedTotal = 0;   // telemetría: la lee ?dev
+/** El recorte lo prende el interruptor del panel, o la mecánica que lo trae. */
+const subcellOn = () => tune.SUBCELL || !!mechanicById(mechId)?.subcell;
+
 function rebuildAfterTopologyChange(plane) {
   topo.rebuild();
+  /* Acá, y no dentro de la mecánica: es el único punto por el que pasan todos
+     los cambios de topología, igual que la medición del puntaje. */
+  if (plane && subcellOn()) cutFaces.rebuild(plane, topo);
+  else if (!plane) cutFaces.clear();
   pieceCount = shape.rebuild();
   const splits = pieces.rebuild();
   jelly.rebuild(topo);
@@ -194,7 +205,7 @@ function rebuildAfterTopologyChange(plane) {
 let acc = 0, lastT = performance.now(), fpsEma = 60, physMs = 0;
 
 installDevtools({
-  lat, topo, jelly, juice, replay, pieces,
+  lat, topo, jelly, juice, replay, pieces, cutFaces,
   getBlades: () => mech.blades,
   getMechanic: () => mechId,
   getMechanicState: () => (mech.devState ? mech.devState() : null),
@@ -321,6 +332,9 @@ function frame(now) {
   if (!frozen) juice.update(dt);
   if (DEV && devState.juiceVisible !== null) juice.points.visible = devState.juiceVisible;
   jelly.update(topo);
+  /* Después de `jelly.update`, que es quien recalcula el suavizado: la cara de
+     corte se apoya en las mismas posiciones, o va un frame atrás de la corteza. */
+  cutFaces.update(shape, jelly.renderPositions());
   jelly.material.uniforms.uTime.value = now * 0.001;
 
   updatePractice(dt);
