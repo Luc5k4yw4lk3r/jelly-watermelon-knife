@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "FSM de la cuchilla de línea",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1080,
+      566
+    ],
+    "views": [
+      {
+        "id": "ciclo",
+        "label": "El ciclo completo",
+        "focus": [
+          "idle",
+          "aiming",
+          "striking",
+          "retracting"
+        ],
+        "note": "IDLE → AIMING → STRIKING → RETRACTING → IDLE, con las duraciones que salen de tune."
+      },
+      {
+        "id": "disparo",
+        "label": "Cuándo se dispara el corte",
+        "focus": [
+          "striking",
+          "corte"
+        ],
+        "note": "Al cruzar el centro de la pieza, no al estar cerca: un frame largo salta la fruta entera."
+      },
+      {
+        "id": "cancelacion",
+        "label": "Cancelar es volver a IDLE",
+        "focus": [
+          "aiming",
+          "idle"
+        ],
+        "note": "No hay estado cancelado: AIMING vuelve a IDLE y exige soltar el botón antes de otro trazo."
+      }
+    ],
+    "legend": {
+      "entries": {
+        "start": {
+          "label": "Estado inicial"
+        },
+        "active": {
+          "label": "Estado activo"
+        },
+        "success": {
+          "label": "Evento del golpe"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Estados del FSM"
+    },
+    {
+      "id": "evento",
+      "label": "Lo que pasa en el golpe"
+    }
+  ],
+  "states": [
+    {
+      "id": "idle",
+      "type": "start",
+      "label": "IDLE",
+      "sublabel": "hoja en espera",
+      "tag": "HOVER_H",
+      "lane": "main",
+      "col": 0,
+      "step": "01"
+    },
+    {
+      "id": "aiming",
+      "type": "active",
+      "label": "AIMING",
+      "sublabel": "arrastra A → B",
+      "tag": "ALIGN_MS 170",
+      "lane": "main",
+      "col": 1,
+      "step": "02"
+    },
+    {
+      "id": "striking",
+      "type": "active",
+      "label": "STRIKING",
+      "sublabel": "baja con ease-in",
+      "tag": "STRIKE_MS 340",
+      "lane": "main",
+      "col": 2,
+      "step": "03"
+    },
+    {
+      "id": "retracting",
+      "type": "active",
+      "label": "RETRACTING",
+      "sublabel": "vuelve arriba",
+      "tag": "RETRACT_MS 250",
+      "lane": "main",
+      "col": 3,
+      "step": "04"
+    },
+    {
+      "id": "corte",
+      "type": "success",
+      "label": "Corte disparado",
+      "sublabel": "out.cut = true",
+      "tag": "una sola vez",
+      "lane": "evento",
+      "col": 0
+    }
+  ],
+  "transitions": [
+    {
+      "id": "abrir",
+      "from": "idle",
+      "to": "aiming",
+      "label": "pinza o botón",
+      "route": "straight",
+      "labelDy": -30
+    },
+    {
+      "id": "soltar",
+      "from": "aiming",
+      "to": "striking",
+      "label": "soltó con len > MIN_CUT_LEN",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -30
+    },
+    {
+      "id": "seguir",
+      "from": "striking",
+      "to": "retracting",
+      "label": "u ≥ 1",
+      "route": "straight",
+      "labelDy": -30
+    },
+    {
+      "id": "disparar",
+      "from": "striking",
+      "to": "corte",
+      "label": "cruzó el centro de la pieza",
+      "variant": "emphasis",
+      "labelDy": 24
+    },
+    {
+      "id": "cancelar",
+      "from": "aiming",
+      "to": "idle",
+      "label": "Esc, mano perdida o línea corta",
+      "note": "needRelease: hay que soltar antes de abrir otro trazo",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          248,
+          230
+        ],
+        [
+          94,
+          230
+        ]
+      ],
+      "labelSegment": 1
+    },
+    {
+      "id": "volver",
+      "from": "retracting",
+      "to": "idle",
+      "label": "u ≥ 1 · len = 0",
+      "fromSide": "top",
+      "toSide": "top",
+      "via": [
+        [
+          556,
+          80
+        ],
+        [
+          94,
+          80
+        ]
+      ],
+      "labelSegment": 1
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Pura, y se prueba en Node",
+      "items": [
+        "Sin DOM, sin three y sin cutter",
+        "Las duraciones salen de tune: un test las fija",
+        "La malla y el corte viven en index.js"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Dispara al cruzar, no al acercarse",
+      "items": [
+        "Un frame largo salta la fruta de una vez",
+        "El u ≥ 1 es la red si el centro queda afuera",
+        "A lo sumo un corte encolado por golpe"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Cancelar exige soltar",
+      "items": [
+        "No hay estado cancelado: AIMING vuelve a IDLE",
+        "Con el botón apretado, IDLE abriría otro trazo",
+        "En pantalla, Esc parecería no hacer nada"
+      ]
+    }
+  ]
+}

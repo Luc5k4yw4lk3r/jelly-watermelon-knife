@@ -1,0 +1,349 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Arquitectura de la sandía de gelatina",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "camino-del-corte",
+        "label": "El camino de un corte",
+        "focus": [
+          "entrada",
+          "mecanicas",
+          "cutter",
+          "main",
+          "puntaje",
+          "hud"
+        ],
+        "note": "Del gesto al HUD: la mecánica decide cuándo cortar y onCut decide qué pasa después."
+      },
+      {
+        "id": "nucleo",
+        "label": "Núcleo de simulación",
+        "focus": [
+          "lattice",
+          "topologia",
+          "shape",
+          "solver",
+          "malla"
+        ],
+        "note": "Typed arrays, paso fijo y shape matching: sin motor de física ni librerías de partículas."
+      },
+      {
+        "id": "espacio-de-camara",
+        "label": "El corte vive en espacio de cámara",
+        "focus": [
+          "escena",
+          "cutter",
+          "lattice"
+        ],
+        "note": "La escena va primero porque el cutter proyecta las partículas a su base, no a XY del mundo."
+      }
+    ],
+    "legend": {
+      "entries": {
+        "frontend": {
+          "label": "Pantalla y entrada"
+        },
+        "backend": {
+          "label": "Lógica"
+        },
+        "database": {
+          "label": "Estado"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "entrada",
+      "type": "frontend",
+      "label": "Entrada",
+      "sublabel": "mano · mouse · replay",
+      "tag": "handPose puro",
+      "pos": [
+        40,
+        70
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "escena",
+      "type": "frontend",
+      "label": "Escena",
+      "sublabel": "render/scene.js",
+      "tag": "base de cámara",
+      "pos": [
+        310,
+        70
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "mecanicas",
+      "type": "backend",
+      "label": "Mecánicas",
+      "sublabel": "tajo libre · cuchillo",
+      "tag": "enter / exit / update",
+      "pos": [
+        40,
+        220
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "cutter",
+      "type": "backend",
+      "label": "Cutter",
+      "sublabel": "physics/cutting.js",
+      "tag": "puro: corta y devuelve",
+      "pos": [
+        310,
+        220
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "main",
+      "type": "backend",
+      "label": "onCut",
+      "sublabel": "main.js",
+      "tag": "único lugar de los efectos",
+      "pos": [
+        580,
+        220
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "puntaje",
+      "type": "backend",
+      "label": "Puntaje",
+      "sublabel": "volume · pieces · cutScore",
+      "tag": "mide en espacio de reposo",
+      "pos": [
+        850,
+        220
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "hud",
+      "type": "frontend",
+      "label": "HUD",
+      "sublabel": "ui/hud.js · cutLabels",
+      "pos": [
+        1120,
+        220
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "lattice",
+      "type": "database",
+      "label": "Lattice",
+      "sublabel": "typed arrays 12×10×12",
+      "tag": "pos · rest · resortes",
+      "pos": [
+        310,
+        370
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "topologia",
+      "type": "backend",
+      "label": "Topología",
+      "sublabel": "celdas vivas y caras",
+      "pos": [
+        850,
+        370
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "shape",
+      "type": "backend",
+      "label": "Shape matching",
+      "sublabel": "descomposición polar",
+      "tag": "normalizada antes de Newton",
+      "pos": [
+        580,
+        520
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "malla",
+      "type": "frontend",
+      "label": "Malla y jugo",
+      "sublabel": "jellyMesh · juice",
+      "pos": [
+        850,
+        520
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "solver",
+      "type": "backend",
+      "label": "Solver",
+      "sublabel": "relajación de resortes",
+      "tag": "paso fijo 1/60",
+      "pos": [
+        310,
+        520
+      ],
+      "size": [
+        140,
+        64
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "gesto",
+      "from": "entrada",
+      "to": "mecanicas",
+      "label": "poses y punteros",
+      "variant": "emphasis",
+      "labelDy": 24
+    },
+    {
+      "id": "base",
+      "from": "escena",
+      "to": "cutter",
+      "label": "derecha / arriba / profundidad",
+      "labelDy": 24
+    },
+    {
+      "id": "pedir-corte",
+      "from": "mecanicas",
+      "to": "cutter",
+      "label": "cut(blade)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "que-paso",
+      "from": "cutter",
+      "to": "main",
+      "label": "severed · spawns",
+      "variant": "emphasis"
+    },
+    {
+      "id": "matar-resortes",
+      "from": "cutter",
+      "to": "lattice",
+      "label": "mata los resortes que cruza",
+      "labelDy": 24
+    },
+    {
+      "id": "rehacer-topo",
+      "from": "main",
+      "to": "topologia",
+      "label": "topo.rebuild()"
+    },
+    {
+      "id": "rehacer-shape",
+      "from": "main",
+      "to": "shape",
+      "label": "shape.rebuild()",
+      "labelDy": 24
+    },
+    {
+      "id": "medir",
+      "from": "main",
+      "to": "puntaje",
+      "label": "solo si hay plano",
+      "variant": "emphasis"
+    },
+    {
+      "id": "mostrar",
+      "from": "puntaje",
+      "to": "hud",
+      "label": "precisión y rango"
+    },
+    {
+      "id": "caras",
+      "from": "topologia",
+      "to": "malla",
+      "label": "caras visibles desde el slot 0",
+      "labelDy": 24
+    },
+    {
+      "id": "tirar-forma",
+      "from": "solver",
+      "to": "shape",
+      "label": "a su forma de reposo"
+    },
+    {
+      "id": "integrar",
+      "from": "solver",
+      "to": "lattice",
+      "label": "integra y relaja"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Orden de construcción",
+      "items": [
+        "La escena va primero: la física usa su base",
+        "lattice → topología → shape → solver → cutter",
+        "Al revés, TDZ difícil de leer en el stack"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Lo que es puro",
+      "items": [
+        "cutter.cut() corta resortes y devuelve qué pasó",
+        "Jugo, sonido, topología y HUD son de onCut",
+        "volume, pieces y cutScore se prueban en Node"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Sin motor de física",
+      "items": [
+        "Todo a mano en typed arrays; three y nada más",
+        "Shape matching: rigidez a través de 10 capas",
+        "La pulpa roja no genera geometría"
+      ]
+    }
+  ]
+}
